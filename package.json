@@ -9,7 +9,7 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
-  "homepage": "https://silasbrodi.github.io/apac-oncologia",
+  "homepage": "https://silasjuba-del.github.io/apac-oncologia",
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
     "react": "^18.2.0",
