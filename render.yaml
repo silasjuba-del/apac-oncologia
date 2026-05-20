@@ -1,0 +1,15 @@
+﻿services:
+  - type: web
+    name: onco-app-backend
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: PORT
+        value: 3001
+    autoDeploy: false
