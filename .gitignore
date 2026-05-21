@@ -1,2 +1,16 @@
-# Local Netlify folder
-.netlify
+node_modules/
+server/node_modules/
+dist/
+.env
+.env.local
+server/.env
+server/.env.example
+uploads/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+# Credenciais Google — NUNCA subir para o GitHub
+server/google-service-account.json
+google-service-account.json
+*.json.key

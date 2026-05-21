@@ -9,17 +9,28 @@ import dotenv    from "dotenv";
 import { fileURLToPath } from "url";
 
 import db, { getPacienteCompleto, buscarPacientes, validarAPAC } from "./db.js";
-import { responderClaude, preencherAPAC }  from "./services/claudeService.js";
+import { responderClaude, preencherAPAC, gerarDossie, gerarDossieComArquivos }  from "./services/claudeService.js";
 import dossieRouter       from "./routes/dossie.js";
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, ".env"), override: true });
 const app       = express();
 const PORT      = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json({ limit:"60mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
+// Em produção: serve o frontend buildado pelo Vite
+if (process.env.NODE_ENV === "production") {
+  const distDir = path.join(__dirname, "../dist");
+  app.use("/apac-oncologia", express.static(distDir));
+  app.get("/apac-oncologia/*", (_req, res) => {
+    res.sendFile(path.join(distDir, "index.html"));
+  });
+  app.get("/", (_req, res) => res.redirect("/apac-oncologia/"));
+}
 fs.mkdirSync(path.join(__dirname, "../uploads"), { recursive: true });
 
 // ── Rotas dossiê (upload direto + Claude) ─────────────────────
@@ -41,6 +52,227 @@ app.post("/api/claude/resumo", async (req,res) => {
 });
 
 // ── Health ────────────────────────────────────────────────────
+
+// ─── Google Drive bridge ─────────────────────────────────────────────────────
+const DRIVE_MIMES = {
+  ".pdf": "application/pdf",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+};
+
+function driveConfigStatus() {
+  const raw = String(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "").trim();
+  return {
+    configured: !!raw,
+    mode: raw ? "google_service_account" : "manual_link",
+    message: raw
+      ? "Google Drive configurado. Compartilhe a pasta com o e-mail da service account."
+      : "Google Drive real ainda não configurado. Use link/descrição/texto; Claude analisará em modo manual.",
+  };
+}
+
+function extrairDriveId(input = "") {
+  const txt = String(input || "").trim();
+  return (
+    txt.match(/\/folders\/([a-zA-Z0-9_-]+)/)?.[1] ||
+    txt.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1] ||
+    txt.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] ||
+    ""
+  );
+}
+
+function tipoProvavelDrive(nome = "") {
+  const n = String(nome).toLowerCase();
+  if (n.includes("biop")) return "Biópsia";
+  if (n.includes("ihq") || n.includes("imuno")) return "Imunohistoquímica";
+  if (n.includes("tomo") || n.includes("tc")) return "Tomografia";
+  if (n.includes("resson") || /\brm\b/.test(n)) return "Ressonância";
+  if (n.includes("mamo")) return "Mamografia";
+  if (n.includes("usg") || n.includes("ultra")) return "Ultrassom";
+  if (n.includes("pet")) return "PET-CT";
+  if (n.includes("lab") || n.includes("hemo")) return "Laboratório";
+  return "Documento";
+}
+
+async function getDriveClient() {
+  const raw = String(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "").trim();
+  if (!raw) return null;
+  let serviceAccountPath = raw;
+  if (!raw.startsWith("{")) {
+    const candidates = [
+      path.resolve(raw),
+      path.resolve(__dirname, raw),
+      path.resolve(__dirname, path.basename(raw)),
+    ];
+    serviceAccountPath = candidates.find(p => fs.existsSync(p)) || candidates[0];
+  }
+  const parsed = raw.startsWith("{")
+    ? JSON.parse(raw)
+    : JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+  const { google } = await import("googleapis");
+  const auth = new google.auth.GoogleAuth({
+    credentials: parsed,
+    scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+  });
+  return google.drive({ version: "v3", auth });
+}
+
+async function driveSearchFiles(q = "") {
+  const drive = await getDriveClient();
+  if (!drive) return { configured:false, folder:null, files:[] };
+  const input = String(q || "").trim();
+  const id = extrairDriveId(input);
+  let folder = null;
+  let files = [];
+  if (id) {
+    const meta = await drive.files.get({
+      fileId: id,
+      fields: "id,name,mimeType,webViewLink,createdTime,modifiedTime,size",
+      supportsAllDrives: true,
+    });
+    if (meta.data.mimeType === "application/vnd.google-apps.folder") {
+      folder = meta.data;
+      const listed = await drive.files.list({
+        q: `'${id}' in parents and trashed=false`,
+        fields: "files(id,name,mimeType,webViewLink,createdTime,modifiedTime,size)",
+        pageSize: 50,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+      files = listed.data.files || [];
+    } else {
+      files = [meta.data];
+    }
+  } else {
+    const folders = await drive.files.list({
+      q: `mimeType='application/vnd.google-apps.folder' and trashed=false and name contains '${input.replace(/'/g, "\\'")}'`,
+      fields: "files(id,name,mimeType,webViewLink,createdTime,modifiedTime,size)",
+      pageSize: 5,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+    folder = (folders.data.files || [])[0] || null;
+    if (folder) {
+      const listed = await drive.files.list({
+        q: `'${folder.id}' in parents and trashed=false`,
+        fields: "files(id,name,mimeType,webViewLink,createdTime,modifiedTime,size)",
+        pageSize: 50,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+      files = listed.data.files || [];
+    }
+  }
+  return {
+    configured:true,
+    folder,
+    files: files.map(f => ({ ...f, tipoProvavel: tipoProvavelDrive(f.name) })),
+  };
+}
+
+async function baixarDriveComoClaudeFiles(files = [], { maxFiles = 3, maxTotalBytes = 9 * 1024 * 1024 } = {}) {
+  const drive = await getDriveClient();
+  if (!drive) return [];
+  const out = [];
+  let totalBytes = 0;
+  for (const f of files.slice(0, 20)) {
+    if (out.length >= maxFiles) break;
+    const mimeType = f.mimeType;
+    if (!["application/pdf","image/jpeg","image/png","image/webp"].includes(mimeType)) continue;
+    const fileSize = parseInt(f.size || "0");
+    // Pular arquivos > 6MB (base64 seria ~8MB, poderia estourar limite Claude)
+    if (fileSize > 6 * 1024 * 1024) {
+      console.log(`[Drive] Ignorando ${f.name} (${Math.round(fileSize/1024)}KB — muito grande)`);
+      continue;
+    }
+    // Verificar limite total acumulado
+    if (totalBytes + fileSize * 1.4 > maxTotalBytes) {
+      console.log(`[Drive] Limite total atingido ao processar ${f.name}`);
+      break;
+    }
+    try {
+      const res = await drive.files.get(
+        { fileId: f.id, alt: "media", supportsAllDrives: true },
+        { responseType: "arraybuffer" }
+      );
+      const b64 = Buffer.from(res.data).toString("base64");
+      totalBytes += b64.length;
+      out.push({ name: f.name, mimeType, base64: b64 });
+      console.log(`[Drive] Baixado: ${f.name} (${Math.round(b64.length/1024)}KB b64)`);
+    } catch(e) {
+      console.warn(`[Drive] Falha ao baixar ${f.name}: ${e.message}`);
+    }
+  }
+  return out;
+}
+
+app.get("/api/drive/health", (_req, res) => {
+  res.json({ ok:true, ...driveConfigStatus() });
+});
+
+app.get("/api/drive/search", async (req, res) => {
+  try {
+    const q = String(req.query.q || "").trim();
+    if (!q) return res.status(400).json({ ok:false, message:"Informe nome, CPF, ID ou link da pasta Drive." });
+    const status = driveConfigStatus();
+    if (!status.configured) return res.json({ ok:true, ...status, folder:null, files:[] });
+    const found = await driveSearchFiles(q);
+    res.json({ ok:true, ...status, ...found });
+  } catch (e) {
+    console.error("[/api/drive/search]", e.message);
+    res.status(500).json({ ok:false, message:e.message });
+  }
+});
+
+app.post("/api/dossie/drive", async (req, res) => {
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(503).json({ ok:false, code:"ANTHROPIC_API_KEY_MISSING", message:"Claude não configurado no backend." });
+    }
+    const { paciente = {}, recepcao = {}, drive_folder = "", texto = "", tipo = "Documento", arquivoIds = null } = req.body || {};
+    const status = driveConfigStatus();
+    let folder = null;
+    let arquivos = [];
+    let filesPayload = [];
+
+    if (status.configured && String(drive_folder || "").trim()) {
+      const found = await driveSearchFiles(drive_folder);
+      folder = found.folder || null;
+      arquivos = found.files || [];
+      // Se o frontend enviou IDs específicos selecionados pelo usuário, filtrar
+      let filesToDownload = arquivos;
+      if (Array.isArray(arquivoIds) && arquivoIds.length > 0) {
+        filesToDownload = arquivos.filter(f => arquivoIds.includes(f.id));
+        console.log(`[Drive] Seleção manual: ${filesToDownload.length} arquivo(s) de ${arquivos.length}`);
+      }
+      filesPayload = await baixarDriveComoClaudeFiles(filesToDownload);
+    }
+
+    const arquivosNomes = filesPayload.map(f => f.name);
+
+    // Se há texto complementar, adicionar como documento de texto
+    if (texto && texto.trim()) {
+      filesPayload.push({ mimeType: "text/plain", text: texto.trim(), name: "Texto colado" });
+    }
+
+    // Usar prompt oncológico completo (mesma qualidade do gerarDossie)
+    const resumo = await gerarDossieComArquivos({
+      paciente: { ...paciente, diag: paciente.diag || tipo },
+      recepcao: { ...recepcao, drive_folder },
+      files: filesPayload,
+      arquivosNomes,
+    });
+
+    res.json({ ok:true, ...status, folder, arquivos, resumo, filesRead:filesPayload.length });
+  } catch (e) {
+    console.error("[/api/dossie/drive]", e.message);
+    res.status(500).json({ ok:false, message:e.message });
+  }
+});
+
+
 app.get("/api/health", (_req, res) => res.json({
   ok: true,
   service: "onco-app-backend-v4",

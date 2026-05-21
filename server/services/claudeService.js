@@ -46,10 +46,152 @@ export async function responderClaude({ prompt, maxTokens = 1200, files = [] }) 
   content.push({ type:"text", text:String(prompt || "") });
   const res = await getClaude().messages.create({
     model: getModel(),
-    max_tokens: Math.min(Number(maxTokens) || 1200, 4000),
+    max_tokens: Math.min(Number(maxTokens) || 1200, 8000),
     messages: [{ role: "user", content }]
   });
   return res.content?.filter(b => b.type === "text").map(b => b.text).join("\n").trim() || "";
+}
+
+// ─────────────────────────────────────────────────────────────
+// 1b. DOSSIÊ A PARTIR DE ARQUIVOS DO DRIVE (PDF/imagem real)
+//     Usa o mesmo prompt estruturado do gerarDossie,
+//     mas envia os arquivos como documentos para leitura direta.
+// ─────────────────────────────────────────────────────────────
+export async function gerarDossieComArquivos({ paciente = {}, recepcao = {}, files = [], arquivosNomes = [] }) {
+  const doencas = parseArr(paciente.doencas);
+  const meds    = parseArr(paciente.medicamentos);
+
+  const listaArquivos = arquivosNomes.length > 0
+    ? arquivosNomes.map((n, i) => `${i + 1}. ${n}`).join("\n")
+    : "Arquivo(s) anexado(s) acima.";
+
+  const content = [];
+
+  // Anexar arquivos como documentos reais (PDF) ou imagens
+  for (const file of (files || []).slice(0, 5)) {
+    const mimeType = file.mimeType || "application/pdf";
+    const data = file.base64 || "";
+    if (!data) continue;
+    if (mimeType === "application/pdf") {
+      content.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data },
+        title: file.name || "Documento Drive",
+        cache_control: { type: "ephemeral" }
+      });
+    } else if (["image/jpeg","image/png","image/webp"].includes(mimeType)) {
+      content.push({ type: "image", source: { type: "base64", media_type: mimeType, data } });
+    }
+  }
+
+  const prompt = `Você é o assistente clínico do Dr. Silas Negrão, Oncologista Clínico,
+Hospital do Bem — Unidade Oncológica, Patos-PB.
+
+LEIA INTEGRALMENTE OS DOCUMENTOS ANEXADOS (PDFs acima).
+Extraia TODOS os dados clínicos, oncológicos e laboratoriais presentes.
+NÃO invente dados ausentes — se ausente: "Não informado."
+NUNCA preencha o campo CONDUTA.
+
+============================================================
+DADOS DO PACIENTE (formulário de recepção)
+============================================================
+Nome: ${paciente.nome || "—"}
+Data nascimento: ${paciente.nasc || paciente.data_nascimento || "—"}
+CNS: ${paciente.cns || recepcao?.cns || "—"}
+CPF: ${paciente.cpf || "—"}
+Nome da mãe: ${paciente.nome_mae || "—"}
+Cidade: ${paciente.cidade || recepcao?.municipio || "—"}
+Convênio: ${recepcao?.convenio || "SUS"}
+Diagnóstico referido: ${paciente.diag || "—"}
+
+Doenças: ${doencas.join(", ") || "não informadas"}
+Medicamentos: ${meds.join(", ") || "nenhum"}
+Alergias: ${paciente.alergias || "nega"}
+Cirurgias prévias: ${paciente.cirurgias || "nega"}
+Tabagismo: ${paciente.tabagismo || "nunca"}
+Etilismo: ${paciente.etilismo || "nunca"}
+Histórico familiar oncológico: ${paciente.historico_familiar || "não relatado"}
+Sintomas atuais: ${paciente.sintomas_atuais || "—"}
+
+============================================================
+ARQUIVOS LIDOS DO GOOGLE DRIVE
+============================================================
+${listaArquivos}
+
+============================================================
+INSTRUÇÕES DE EXTRAÇÃO
+============================================================
+Leia cada documento anexado na íntegra e extraia:
+- Dados de identificação (nome, CNS, CPF, data nascimento, mãe, cidade)
+- Diagnóstico histológico exato (tipo histológico, grau, subtipo molecular)
+- Estadiamento TNM completo
+- Resultados de imuno-histoquímica (RE, RP, HER2, Ki-67, PD-L1, etc.)
+- Resultados de anatomopatológico (topografia, dimensão, margens, linfonodos)
+- Resultados de imagem (TC, PET, RM, USG, mamografia — dimensões, linfonodos, metástases)
+- Datas de todos os exames e procedimentos
+- Médicos solicitantes/laudadores
+- Pendências documentais
+
+============================================================
+FORMATO OBRIGATÓRIO — use EXATAMENTE estes marcadores
+============================================================
+
+===DADOS ANAGRÁFICOS===
+Nome: | DN: | Sexo: | CPF: | CNS: | Mãe: | Cidade: | Convênio:
+
+===DADOS CLÍNICOS===
+Antecedentes: [traduzir para termos médicos]
+Tabagismo e etilismo: [formato padrão clínico]
+Medicações de uso contínuo: [nomes genéricos]
+Alergias: [se nenhuma: "Nega alergias medicamentosas conhecidas"]
+Cirurgias prévias: [se nenhuma: "Nega cirurgias anteriores"]
+Histórico familiar oncológico: [se nenhum: "Nega história familiar de neoplasias"]
+Sintomas atuais: [prosa clínica objetiva]
+
+===DADOS ONCOLÓGICOS===
+Diagnóstico: [em maiúsculas — ex: CARCINOMA DUCTAL INVASIVO DE MAMA DIREITA]
+Estadiamento: [ex: pT1b pN0(sn) M0 — ESTÁGIO I]
+Subtipo molecular: [ex: LUMINAL A / HER2 NEGATIVO / TRIPLO NEGATIVO]
+Biomarcadores:
+  RE: | RP: | HER2: | Ki-67: | Outros:
+Grau histológico: [Nottingham ou equivalente]
+Margens cirúrgicas: [livres / comprometidas / distância]
+
+===EXAMES E LAUDOS===
+[Para cada documento lido — formato:]
+[DATA] — [TIPO] ([Nº laudo/laboratório]):
+  → [resumo oncológico completo e objetivo]
+  → Achados relevantes: [topografia, dimensões, linfonodos, margens, invasão]
+
+===LABORATÓRIO E EXAME FÍSICO===
+[Deixar em branco — preenchimento médico]
+
+===CONDUTA===
+[DEIXAR EM BRANCO — EXCLUSIVO DO MÉDICO]
+
+===OBS CLAUDE===
+Pendências documentais: [o que falta para estadiamento completo]
+Exames complementares sugeridos: [ex: PET-CT, cintilografia óssea, RM hepática]
+Biomarcadores sugeridos: [específicos para este tumor]
+Alerta APAC: [campos críticos ausentes que podem gerar glosa SUS]
+Possível protocolo SUS/INCA/SBOC: [baseado no diagnóstico e estadiamento]
+Referência bibliográfica relevante: ["Estudo X (NEJM/JCO/Lancet ANO) comparou A vs B, demonstrando X meses de SG e redução de Y% no risco de morte."]
+
+REGRAS FINAIS:
+- CONDUTA sempre vazio — exclusivo do médico
+- Diagnóstico e biomarcadores: em MAIÚSCULAS
+- Sem "gerado por IA", sem rodapé, sem saudações
+- Se dado ausente nos documentos: "Não informado." — jamais inventar
+- Seja detalhado: prefira excesso de informação clínica a resumos superficiais`;
+
+  content.push({ type: "text", text: prompt });
+
+  const res = await getClaude().messages.create({
+    model: getModel(),
+    max_tokens: 6000,
+    messages: [{ role: "user", content }],
+  });
+  return res.content.filter(b => b.type === "text").map(b => b.text).join("\n");
 }
 
 export async function gerarDossie({ paciente, recepcao, textosLaudos = [] }) {

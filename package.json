@@ -7,7 +7,9 @@
     "build": "node --no-deprecation node_modules/vite/bin/vite.js build",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "build:render": "npm install && npm run build && cd server && npm install",
+    "start": "node server/index.js"
   },
   "homepage": "https://silasjuba-del.github.io/apac-oncologia",
   "dependencies": {
