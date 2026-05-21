@@ -354,26 +354,28 @@ app.post("/api/recepcao/confirmar", (req, res) => {
         nome_mae=COALESCE(@nome_mae,nome_mae), cns=COALESCE(@cns,cns),
         status='em_atendimento'
       WHERE id=@id
-    `).run({ ...(dados||{}), id:paciente_id });
+    `).run({ nome:null, cpf:null, data_nascimento:null, cidade:null, telefone:null, nome_mae:null, cns:null, ...(dados||{}), id:paciente_id });
 
     const exist = db.prepare("SELECT id FROM recepcao WHERE paciente_id=? LIMIT 1").get(paciente_id);
     let recId;
     if (exist) {
       db.prepare(`
         UPDATE recepcao SET nome=@nome,cpf=@cpf,data_nascimento=@data_nascimento,
-        cidade=@cidade,telefone=@telefone,nome_mae=@nome_mae,convenio=@convenio,
+        telefone=@telefone,nome_mae=@nome_mae,convenio=@convenio,
         numero_sus=@numero_sus,cns=@cns,logradouro=@logradouro,bairro=@bairro,
         municipio=@municipio,uf=@uf,cep=@cep,drive_folder=@drive_folder
         WHERE id=@id
       `).run({ ...(dados||{}), drive_folder:drive_folder||null, id:exist.id });
       recId = exist.id;
     } else {
+      const defaults = { nome:null,cpf:null,data_nascimento:null,telefone:null,nome_mae:null,
+        convenio:null,numero_sus:null,cns:null,logradouro:null,bairro:null,municipio:null,uf:null,cep:null };
       const info = db.prepare(`
-        INSERT INTO recepcao (paciente_id,nome,cpf,data_nascimento,cidade,telefone,
+        INSERT INTO recepcao (paciente_id,nome,cpf,data_nascimento,telefone,
         nome_mae,convenio,numero_sus,cns,logradouro,bairro,municipio,uf,cep,drive_folder)
-        VALUES (@paciente_id,@nome,@cpf,@data_nascimento,@cidade,@telefone,
+        VALUES (@paciente_id,@nome,@cpf,@data_nascimento,@telefone,
         @nome_mae,@convenio,@numero_sus,@cns,@logradouro,@bairro,@municipio,@uf,@cep,@drive_folder)
-      `).run({ paciente_id, ...(dados||{}), drive_folder:drive_folder||null });
+      `).run({ ...defaults, paciente_id, ...(dados||{}), drive_folder:drive_folder||null });
       recId = info.lastInsertRowid;
     }
     res.json({ ok:true, recepcaoId:recId });
