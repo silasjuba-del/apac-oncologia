@@ -2410,7 +2410,7 @@ function MicCaptura({onTexto}){const [rec,setRec]=useState(false);const start=()
 function TriagemQT({setPrint}){return <TriagemComp sins={[]} setSins={()=>{}} pac={{}} setPrint={setPrint}/>;}
 
 function _getApiKey(){return window.__ANTHROPIC_KEY__||localStorage.getItem("anthropic_key")||"";}
-function _apiUrl(){return (import.meta.env.VITE_API_URL||"http://127.0.0.1:3001").replace(/\/$/,"");}
+function _apiUrl(){const u=import.meta.env.VITE_API_URL||"http://127.0.0.1:3001";return u==="/"?"":u.replace(/\/$/,"");}
 async function gerarResumoProntuarioIA(pac){
   const prompt=`Você é assistente de organização clínica oncológica do Dr. Silas Negrão, Hospital do Bem, Patos-PB.
 Organize os dados abaixo em resumo estruturado para evolução médica editável.
@@ -3345,7 +3345,7 @@ function APACDossieChecklist({dossie,setDossie}){
 }
 
 function DriveDossieComp({pac,dossie,setDossie,addMsg}){
-  const API_URL=(import.meta.env.VITE_API_URL||"http://127.0.0.1:3001").replace(/\/$/,"");
+  const API_URL=_apiUrl();
   const [url,setUrl]=useState(pac?.drive_folder||[pac?.nome,pac?.nasc].filter(Boolean).join(" "));
   const [texto,setTexto]=useState("");
   const [tipo,setTipo]=useState("Laudo/Exame");
@@ -3464,7 +3464,7 @@ function ProntuarioEvolucao({pac,up,addMsg,onConcluir}){
   const [concluido,setConcluido]=useState(false);
   const [gerandoDossie,setGerandoDossie]=useState(false);
   const [dossieStatus,setDossieStatus]=useState("");
-  const API_URL=(import.meta.env.VITE_API_URL||"http://127.0.0.1:3001").replace(/\/$/,"");
+  const API_URL=_apiUrl();
 
   const gerarDossie=async()=>{
     if(!pac?.pacID&&!pac?.id){setDossieStatus("⚠ Salve o paciente primeiro.");return;}
