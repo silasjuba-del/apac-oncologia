@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview de transicoes de cards</title>
+  <style>
+    :root{
+      --navy:#0D1F3C;
+      --navy2:#1B365D;
+      --gold:#B8860B;
+      --gold2:#D4A017;
+      --white:#FFFFFF;
+      --soft:#F5F7FA;
+      --border:#DDE3EC;
+      --green:#15803D;
+      --red:#B91C1C;
+      --muted:#64748B;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:linear-gradient(135deg,var(--navy) 0%,#122a50 42%,#ffffff 42%,#ffffff 100%);
+      color:var(--navy);
+      padding:24px;
+    }
+    .shell{max-width:1240px;margin:0 auto;display:grid;gap:18px}
+    .toolbar,.stage,.catalog{
+      background:#fff;
+      border:1.5px solid color-mix(in srgb,var(--gold) 45%,transparent);
+      border-radius:24px;
+      box-shadow:0 22px 54px rgba(13,31,60,.16),0 0 0 7px rgba(184,134,11,.04);
+    }
+    .toolbar{padding:16px;display:grid;gap:12px}
+    h1{margin:0;font-size:30px;line-height:1.05;color:var(--navy);font-weight:950}
+    .sub{margin:5px 0 0;color:var(--muted);font-size:13px;font-weight:800}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .label{font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:1px;color:var(--gold)}
+    button{
+      border:1.5px solid var(--border);
+      background:#fff;
+      color:var(--navy);
+      border-radius:15px;
+      padding:9px 13px;
+      font-weight:950;
+      cursor:pointer;
+      font-family:inherit;
+      transition:.18s ease;
+    }
+    button:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(13,31,60,.12)}
+    button.active{background:var(--gold);color:#fff;border-color:var(--gold)}
+    .stage{padding:18px;overflow:hidden}
+    .topline{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px}
+    .progress{height:8px;background:#E8EEF7;border-radius:999px;overflow:hidden;margin-bottom:14px}
+    .progress span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),#2B7A8C);border-radius:999px;animation:progress 5s linear infinite}
+    .viewport{position:relative;min-height:660px;display:grid;place-items:center;perspective:1200px}
+    .card{
+      width:min(1180px,100%);
+      aspect-ratio:16/9;
+      min-height:560px;
+      border-radius:26px;
+      background:#fff;
+      border:1.5px solid color-mix(in srgb,var(--gold) 55%,transparent);
+      box-shadow:0 24px 58px rgba(13,31,60,.18);
+      overflow:hidden;
+      position:relative;
+      display:block;
+      cursor:pointer;
+      padding:22px;
+    }
+    .card::after{content:"";position:absolute;right:-90px;top:-90px;width:320px;height:320px;border-radius:50%;background:rgba(184,134,11,.08);pointer-events:none}
+    .card.dark{background:linear-gradient(135deg,var(--navy),#16274c);color:#fff}
+    .study-top{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;position:relative;z-index:2}
+    .study-kicker{font-size:17px;color:var(--gold);font-weight:950;text-transform:uppercase;letter-spacing:4px;margin-bottom:16px}
+    .study-title{font-size:54px;line-height:.95;font-weight:950;color:var(--navy);letter-spacing:-1px}
+    .card.dark .study-title{color:#fff}
+    .study-title span{color:var(--gold)}
+    .study-drug{font-size:28px;font-weight:950;color:var(--navy);text-transform:uppercase;margin-top:8px}
+    .card.dark .study-drug{color:#fff}
+    .study-sub{font-size:18px;color:#334155;font-weight:850;margin-top:6px}
+    .card.dark .study-sub{color:rgba(255,255,255,.78)}
+    .small-medal{width:106px;height:106px;border-radius:50%;background:radial-gradient(circle at 34% 24%,#fff3ae,#d8b64d 38%,#a77b16 74%);border:5px solid #f5d86a;display:grid;place-items:center;text-align:center;color:var(--navy);font-weight:950;font-size:22px;box-shadow:0 12px 28px rgba(184,134,11,.28);flex:0 0 auto}
+    .study-strip{margin-top:14px;background:linear-gradient(90deg,var(--navy),#07152b);color:#fff;border:2px solid var(--gold);border-radius:12px;padding:11px 18px;font-size:19px;font-weight:950;position:relative;z-index:2}
+    .study-layout{display:grid;grid-template-columns:1.07fr .93fr;gap:18px;margin-top:18px;position:relative;z-index:2}
+    .km-panel,.risk-panel,.os-panel,.outcomes{background:#fff;border:1.5px solid rgba(184,134,11,.28);border-radius:20px;box-shadow:0 8px 20px rgba(13,31,60,.07)}
+    .card.dark .km-panel,.card.dark .risk-panel,.card.dark .os-panel,.card.dark .outcomes{background:rgba(255,255,255,.08);border-color:rgba(184,134,11,.55)}
+    .km-panel{padding:17px}
+    .panel-label{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(90deg,#fff4ce,#f5d77a);border:1px solid rgba(184,134,11,.45);border-radius:999px;padding:5px 16px;color:var(--navy);font-size:17px;font-weight:950;text-transform:uppercase;margin-bottom:10px}
+    .graph{background:#F8FAFC;border:1px solid var(--border);border-radius:18px;padding:10px;height:250px}
+    .card.dark .graph{background:rgba(13,31,60,.35);border-color:rgba(255,255,255,.18)}
+    .outcomes{margin-top:12px;padding:13px 15px;display:grid;grid-template-columns:76px 1fr;gap:12px;align-items:center}
+    .target{font-size:50px;text-align:center}
+    .outcomes-text{font-size:16px;line-height:1.45;color:var(--navy);font-weight:900}
+    .card.dark .outcomes-text{color:#fff}
+    .right-stack{display:grid;gap:14px}
+    .risk-panel{padding:18px;display:grid;grid-template-columns:240px 1fr;gap:18px;align-items:center}
+    .gold-shield{width:222px;height:222px;clip-path:polygon(50% 0,90% 16%,82% 74%,50% 100%,18% 74%,10% 16%);background:radial-gradient(circle at 34% 24%,#fff2a8,#d5a520 37%,#a96e10 74%);display:grid;place-items:center;text-align:center;color:#fff;text-shadow:0 3px 8px rgba(0,0,0,.36);filter:drop-shadow(0 18px 20px rgba(184,134,11,.24))}
+    .gold-shield strong{display:block;font-size:70px;line-height:.95}
+    .gold-shield span{display:block;font-size:24px;font-weight:950;text-transform:uppercase;line-height:1.02}
+    .risk-copy{font-size:21px;line-height:1.25;color:var(--navy);font-weight:950}
+    .card.dark .risk-copy{color:#fff}
+    .hr{font-size:23px;color:var(--navy);font-weight:950;margin-top:14px;border-top:1px solid rgba(184,134,11,.5);padding-top:12px}
+    .card.dark .hr{color:#fff}
+    .os-panel{padding:18px;display:grid;grid-template-columns:110px 1fr;gap:16px;align-items:center}
+    .heart{font-size:74px;text-align:center;filter:drop-shadow(0 10px 12px rgba(184,134,11,.24))}
+    .os-text{font-size:25px;line-height:1.22;color:var(--navy);font-weight:950}
+    .card.dark .os-text{color:#fff}
+    .conclusion{position:absolute;left:36px;right:36px;bottom:24px;background:linear-gradient(90deg,var(--navy),#07152b);border:2px solid var(--gold);border-radius:14px;color:#fff;padding:15px 22px;font-size:24px;line-height:1.15;font-weight:950;z-index:2}
+    .card-head{
+      background:linear-gradient(90deg,var(--navy),var(--navy2));
+      color:#fff;
+      padding:18px 24px;
+      border-bottom:5px solid var(--gold);
+      display:flex;
+      justify-content:space-between;
+      gap:18px;
+      align-items:center;
+    }
+    .card-title{font-size:32px;line-height:1.05;font-weight:950}
+    .card-tag{font-size:13px;color:rgba(255,255,255,.76);font-weight:850;margin-top:5px}
+    .badge{
+      width:78px;height:78px;border-radius:50%;
+      background:radial-gradient(circle at 35% 25%,#fff2a8,#d8b64d 38%,#a77b16 74%);
+      border:4px solid #f4d96e;
+      display:grid;place-items:center;text-align:center;
+      color:#fff;font-weight:950;font-size:12px;
+      text-shadow:0 2px 5px rgba(0,0,0,.36);
+      flex:0 0 auto;
+    }
+    .card-body{padding:24px;display:grid;grid-template-columns:1.1fr .9fr;gap:22px;align-items:center}
+    .eyebrow{font-size:12px;color:var(--gold);font-weight:950;text-transform:uppercase;letter-spacing:1.2px}
+    .headline{font-size:44px;line-height:1;margin:10px 0;color:var(--navy);font-weight:950}
+    .copy{color:#334155;font-size:17px;line-height:1.45;font-weight:800;max-width:620px}
+    svg{width:100%;height:100%}
+    .medal{
+      width:230px;height:230px;border-radius:50%;margin:auto;
+      background:radial-gradient(circle at 35% 25%,#fff2a8,#d8b64d 36%,#a77b16 72%,#6e500c);
+      border:7px solid #f4d96e;
+      box-shadow:0 24px 50px rgba(184,134,11,.38),inset 0 0 0 9px rgba(255,255,255,.18);
+      display:grid;place-items:center;text-align:center;color:#fff;
+      text-shadow:0 3px 8px rgba(0,0,0,.36);
+    }
+    .medal strong{display:block;font-size:58px;line-height:1}
+    .medal span{display:block;font-size:22px;line-height:1.04;font-weight:950;text-transform:uppercase}
+    .card-foot{background:var(--navy);color:#fff;padding:15px 24px;font-size:22px;font-weight:950;text-align:center}
+    .cardsmall{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+    .cardsmall div{background:#F8FAFC;border:1px solid var(--border);border-radius:15px;padding:12px;font-weight:950}
+    .catalog{padding:16px}
+    .catalog-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px}
+    .tile{padding:13px;border:1px solid var(--border);border-radius:16px;background:#fff}
+    .tile b{display:block;color:var(--navy);font-size:14px}
+    .tile span{display:block;color:var(--muted);font-size:12px;font-weight:750;margin-top:4px}
+    .overlay{position:fixed;inset:0;background:rgba(13,31,60,.62);backdrop-filter:blur(12px);z-index:20;display:none;place-items:center;padding:24px}
+    .overlay.open{display:grid}
+    .modal{width:min(1040px,96vw);max-height:90vh;overflow:auto;animation:modalZoom .35s cubic-bezier(.2,.8,.2,1) both}
+    .closebar{display:flex;justify-content:flex-end;gap:10px;margin-top:12px}
+    .closebar button{background:var(--gold);border:none;color:#fff}
+    .theme-safira{--navy:#0D1F3C;--navy2:#1B365D;--gold:#B8860B;--soft:#EAF1FA}
+    .theme-clinico{--navy:#1B365D;--navy2:#2B7A8C;--gold:#B8860B;--soft:#F8FAFC}
+    .theme-radio{--navy:#101820;--navy2:#182536;--gold:#E6C460;--soft:#111827}
+    .anim-slide{animation:slideIn .55s cubic-bezier(.2,.8,.2,1) both}
+    .anim-zoom{animation:zoomIn .55s cubic-bezier(.2,.8,.2,1) both}
+    .anim-flip{animation:flipIn .58s cubic-bezier(.2,.8,.2,1) both}
+    .anim-fade{animation:fadeIn .5s ease both}
+    .anim-blur{animation:blurScale .58s ease both}
+    @keyframes slideIn{from{opacity:0;transform:translateX(90px) scale(.98)}to{opacity:1;transform:none}}
+    @keyframes zoomIn{from{opacity:0;transform:scale(.76);filter:blur(8px)}to{opacity:1;transform:scale(1);filter:none}}
+    @keyframes flipIn{from{opacity:0;transform:rotateY(-70deg) scale(.88)}to{opacity:1;transform:rotateY(0) scale(1)}}
+    @keyframes fadeIn{from{opacity:.05}to{opacity:1}}
+    @keyframes blurScale{from{opacity:.15;transform:scale(1.08);filter:blur(16px)}to{opacity:1;transform:scale(1);filter:none}}
+    @keyframes progress{from{width:0}to{width:100%}}
+    @keyframes modalZoom{from{opacity:0;transform:scale(.72) translateY(26px);filter:blur(12px)}to{opacity:1;transform:scale(1);filter:none}}
+    @media(max-width:980px){.viewport{min-height:850px}.card{aspect-ratio:auto;min-height:780px}.study-layout,.risk-panel{grid-template-columns:1fr}.conclusion{position:static;margin-top:14px}.study-title{font-size:38px}.graph{height:210px}.gold-shield{width:190px;height:190px;margin:auto}}
+  </style>
+</head>
+<body class="theme-safira">
+  <div class="shell">
+    <section class="toolbar">
+      <div>
+        <h1>Preview funcional de transicoes de cards</h1>
+        <p class="sub">Escolha tema, estilo, transicao e clique. Tudo roda em CSS dentro do navegador.</p>
+      </div>
+      <div class="row">
+        <span class="label">Tema</span>
+        <button data-theme="theme-safira" class="active">💎 Safira</button>
+        <button data-theme="theme-clinico">🏥 Clinico</button>
+        <button data-theme="theme-radio">🔬 Radiologia</button>
+      </div>
+      <div class="row">
+        <span class="label">Transicao</span>
+        <button data-anim="anim-slide">Slide lateral</button>
+        <button data-anim="anim-zoom" class="active">Zoom Prezi</button>
+        <button data-anim="anim-flip">Flip verso</button>
+        <button data-anim="anim-fade">Fade</button>
+        <button data-anim="anim-blur">Blur + scale</button>
+      </div>
+      <div class="row">
+        <span class="label">Conteudo</span>
+        <button data-card="trial" class="active">Trial outcome</button>
+        <button data-card="section">Secao do app</button>
+        <button data-card="kpi">KPI clinico</button>
+        <button data-card="queue">Fila prioridade</button>
+      </div>
+    </section>
+
+    <section class="stage">
+      <div class="topline">
+        <div class="label">Card ativo</div>
+        <button id="pauseBtn">Pausar auto-loop</button>
+      </div>
+      <div class="progress"><span id="progress"></span></div>
+      <div class="viewport" id="viewport"></div>
+    </section>
+
+    <section class="catalog">
+      <div class="label">Catalogo de nomes para prompt</div>
+      <div class="catalog-grid">
+        <div class="tile"><b>Slide lateral</b><span>entra pela direita e sai pela esquerda.</span></div>
+        <div class="tile"><b>Zoom Prezi</b><span>aproxima o card para primeiro plano.</span></div>
+        <div class="tile"><b>Flip verso</b><span>vira como cartao para mostrar detalhes.</span></div>
+        <div class="tile"><b>Fade / crossfade</b><span>dissolve de um card para outro.</span></div>
+        <div class="tile"><b>Blur + scale</b><span>desfoca o anterior e amplia o novo.</span></div>
+        <div class="tile"><b>Progress timed transition</b><span>barra indica tempo ate trocar.</span></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div>
+      <div class="modal" id="modal"></div>
+      <div class="closebar"><button id="closeBtn">Fechar zoom</button></div>
+    </div>
+  </div>
+
+  <script>
+    const viewport = document.getElementById("viewport");
+    const overlay = document.getElementById("overlay");
+    const modal = document.getElementById("modal");
+    const progress = document.getElementById("progress");
+    const pauseBtn = document.getElementById("pauseBtn");
+    let anim = "anim-zoom";
+    let cardType = "trial";
+    let paused = false;
+    let idx = 0;
+
+    const data = {
+      trial: {
+        title:"DESTINY-Breast04",
+        tag:"Mama HER2-low metastatico",
+        eyebrow:"Clinical trial outcome",
+        headline:"Nova categoria terapeutica HER2-low",
+        copy:"Card com mini curva Kaplan-Meier, medalha KPI e desfecho principal em linguagem visual.",
+        kpi:"36%",
+        kpiText:"Reducao SG mediana",
+        foot:"T-DXd supera quimioterapia: SG 23,4m vs 16,8m · HR 0,64"
+      },
+      section: {
+        title:"Drive para IA",
+        tag:"Secao do app",
+        eyebrow:"Atalho operacional",
+        headline:"Documentos entram no dossie",
+        copy:"O clique pode abrir zoom, verso do card, modal ou redirecionar para a secao real do app.",
+        kpi:"IA",
+        kpiText:"Filtro antes do prontuario",
+        foot:"Recepcao ou medico anexa laudos e Claude resume antes da evolucao"
+      },
+      kpi: {
+        title:"Produtividade",
+        tag:"Indicador clinico",
+        eyebrow:"KPI dashboard",
+        headline:"Numeros em movimento",
+        copy:"Use para APACs, glosas, pacientes atendidos, pendencias e documentos processados.",
+        kpi:"124",
+        kpiText:"Sessoes no mes",
+        foot:"Grafico progressivo em verde, amarelo e vermelho"
+      },
+      queue: {
+        title:"Fila do Dia",
+        tag:"Prioridade assistencial",
+        eyebrow:"Atendimento",
+        headline:"Standby sinalizado",
+        copy:"Cards de pacientes com prioridade, check-in, alerta e abertura rapida do atendimento.",
+        kpi:"3",
+        kpiText:"Criticos",
+        foot:"Clique no paciente abre novo atendimento e limpa dados anteriores"
+      }
+    };
+
+    function graphSvg(){
+      return `
+      <svg viewBox="0 0 420 180" aria-hidden="true">
+        <line x1="20" y1="32" x2="400" y2="32" stroke="#DDE3EC"/>
+        <line x1="20" y1="70" x2="400" y2="70" stroke="#DDE3EC"/>
+        <line x1="20" y1="108" x2="400" y2="108" stroke="#DDE3EC"/>
+        <line x1="20" y1="146" x2="400" y2="146" stroke="#DDE3EC"/>
+        <path d="M24 34 C90 35, 140 54, 198 60 S300 95, 394 104" fill="none" stroke="#B8860B" stroke-width="7" stroke-linecap="round"/>
+        <path d="M24 39 C94 50, 148 78, 206 86 S302 124, 394 136" fill="none" stroke="#94A3B8" stroke-width="6" stroke-dasharray="12 12" stroke-linecap="round"/>
+        <circle cx="394" cy="104" r="10" fill="#15803D"/>
+        <circle cx="394" cy="136" r="9" fill="#B91C1C"/>
+        <text x="20" y="174" fill="#0D1F3C" font-size="14" font-weight="900">0</text>
+        <text x="184" y="174" fill="#0D1F3C" font-size="14" font-weight="900">36m</text>
+        <text x="360" y="174" fill="#0D1F3C" font-size="14" font-weight="900">72m</text>
+      </svg>`;
+    }
+
+    function render(){
+      const c = data[cardType];
+      const dark = document.body.classList.contains("theme-radio") || document.body.classList.contains("theme-safira");
+      viewport.innerHTML = `
+        <article class="card ${dark ? "dark" : ""} ${anim}" id="card">
+          <div class="study-top">
+            <div>
+              <div class="study-kicker">🧬 Estudos · Medalha + Curva</div>
+              <div class="study-title">${c.title} <span>| ${c.tag}</span></div>
+              <div class="study-drug">${cardType === "trial" ? "Osimertinibe | Adjuvante" : c.title}</div>
+              <div class="study-sub">${c.eyebrow} · ${c.headline}</div>
+            </div>
+            <div class="small-medal">1L</div>
+          </div>
+          <div class="study-strip">🛡 ${cardType === "trial" ? "Osimertinibe adjuvante vs Placebo | CPNPC EGFR+ | Estádio IB-IIIA após ressecção" : c.copy}</div>
+          <div class="study-layout">
+            <div>
+              <div class="km-panel">
+                <div class="panel-label">📈 Sobrevida livre de doença</div>
+                <div class="graph">${graphSvg()}</div>
+              </div>
+              <div class="outcomes">
+                <div class="target">🎯</div>
+                <div class="outcomes-text">✓ SLD mediana: 65,8 vs 21,9 meses<br/>✓ HR SLD: 0,23 · IC 95% 0,18-0,30<br/>✓ SG HR: 0,49</div>
+              </div>
+            </div>
+            <div class="right-stack">
+              <div class="risk-panel">
+                <div class="gold-shield"><div><strong>${cardType === "trial" ? "77%" : c.kpi}</strong><span>Reducao<br/>de risco</span><small>HR 0,23</small></div></div>
+                <div>
+                  <div class="panel-label">Reducao de risco</div>
+                  <div class="risk-copy">Reducao do risco de recorrencia de doenca ou obito</div>
+                  <div class="hr">HR = 0,23<br/><small>IC 95%: 0,18-0,30</small></div>
+                </div>
+              </div>
+              <div class="os-panel">
+                <div class="heart">💚</div>
+                <div>
+                  <div class="panel-label">Sobrevida global</div>
+                  <div class="os-text">Prolongou a sobrevida global e reduziu mortalidade.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="conclusion">${c.foot}</div>
+        </article>`;
+      document.getElementById("card").onclick = () => {
+        modal.innerHTML = viewport.innerHTML;
+        overlay.classList.add("open");
+      };
+      progress.style.animation = "none";
+      progress.offsetHeight;
+      progress.style.animation = paused ? "none" : "progress 5s linear infinite";
+    }
+
+    document.querySelectorAll("[data-theme]").forEach(btn => btn.onclick = () => {
+      document.querySelectorAll("[data-theme]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.body.className = btn.dataset.theme;
+      render();
+    });
+    document.querySelectorAll("[data-anim]").forEach(btn => btn.onclick = () => {
+      document.querySelectorAll("[data-anim]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      anim = btn.dataset.anim;
+      render();
+    });
+    document.querySelectorAll("[data-card]").forEach(btn => btn.onclick = () => {
+      document.querySelectorAll("[data-card]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      cardType = btn.dataset.card;
+      render();
+    });
+    pauseBtn.onclick = () => {
+      paused = !paused;
+      pauseBtn.textContent = paused ? "Retomar auto-loop" : "Pausar auto-loop";
+      render();
+    };
+    document.getElementById("closeBtn").onclick = () => overlay.classList.remove("open");
+    overlay.onclick = e => { if(e.target === overlay) overlay.classList.remove("open"); };
+    setInterval(() => {
+      if(paused) return;
+      const keys = Object.keys(data);
+      idx = (idx + 1) % keys.length;
+      cardType = keys[idx];
+      document.querySelectorAll("[data-card]").forEach(b => b.classList.toggle("active", b.dataset.card === cardType));
+      render();
+    }, 5000);
+    render();
+  </script>
+</body>
+</html>
