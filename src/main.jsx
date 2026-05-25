@@ -1,6 +1,7 @@
 ﻿import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import { EncounterProvider } from './contexts/EncounterContext.jsx'
 
 class AppErrorBoundary extends React.Component {
   constructor(props){
@@ -33,7 +34,9 @@ class AppErrorBoundary extends React.Component {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AppErrorBoundary>
-      <App />
+      <EncounterProvider>
+        <App />
+      </EncounterProvider>
     </AppErrorBoundary>
   </React.StrictMode>
 )

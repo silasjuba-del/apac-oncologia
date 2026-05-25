@@ -92,6 +92,11 @@ import {
   loadPacAtual, savePacAtual, clearPacAtual,
   loadAiPatches, saveAiPatches,
 } from './utils/storage.js';
+// ── F0 — Contrato de identidade clínica ──────────────────────────────────────
+import {
+  openEncounter, closeEncounter, requireEncounter,
+} from './utils/clinicalStore';
+import { createEncounter, ENCOUNTER_TIPOS } from './utils/encounterMachine';
 import {
   dbInit, dbSalvarPaciente, dbCarregarPacientes,
   dbSalvarAgenda, dbCarregarAgenda,
@@ -113,6 +118,18 @@ import {
   ESTOQUE_IV, MEDS_ORAIS,
 } from './utils/constants';
 import { _getApiKey, _apiUrl, chamarClaude, chamarGPT, chamarGemini, chamarGrok } from './utils/api';
+
+// ── F0 — Inferir tipo de encounter a partir dos dados do paciente ─────────────
+// Regra: QT detectado pelo protocolo/tratamento → RETORNO_QT
+//         Sem tratamento → PRIMEIRA_CONSULTA
+//         Default         → RETORNO_CLINICO
+const _inferirTipoEncounter = (pac) => {
+  if (!pac?.trat && !pac?.linha) return ENCOUNTER_TIPOS.PRIMEIRA_CONSULTA;
+  const trat = String(pac?.trat || '').toLowerCase();
+  const hasQT = ['qt','quimio','folfox','capecita','ciclo','esquema','xelox',
+                 'folfiri','carbo','cispl','taxo','vincr'].some(k => trat.includes(k));
+  return hasQT ? ENCOUNTER_TIPOS.RETORNO_QT : ENCOUNTER_TIPOS.RETORNO_CLINICO;
+};
 
 const toN=v=>Number((v||"0").replace(",","."))||0;
 const cDose=(dr,sc,clcr,auc,red)=>{const f=1-(red/100);if(dr.t==="m2")return`${Math.round(dr.d*toN(sc)*f)} mg`;if(dr.t==="fix")return`${Math.round(dr.d*f)} mg`;return`${Math.round((toN(auc)||dr.d)*(toN(clcr)+25)*f)} mg`;};
@@ -212,9 +229,13 @@ export default function App(){
     }
     setPac(x=>{const novo={...x,[k]:v};savePacAtual(novo);dbSalvarPaciente(novo);return novo;});
   };
-  // P1 — setDossie guardado: bloqueia escrita no dossie sem paciente ativo (espelha up())
+  // P1+F0 — setDossie guardado: bloqueia escrita sem paciente ativo E sem encounter aberto
   const setDossieGuardado=(fn)=>{
     if(!requireActivePatient(pac)){console.warn("[P1] setDossie bloqueado — sem paciente ativo");return;}
+    const encCheck = requireEncounter(pac);
+    if(!encCheck.ok){console.warn("[F0] setDossieGuardado bloqueado — sem atendimento aberto:",encCheck.reason);}
+    // Aviso não bloqueante nesta fase (F1): registra e continua para não quebrar fluxo legado.
+    // F2 tornará este guard bloqueante após migração completa dos componentes.
     setDossieOncologico(fn);
   };
   // Auto-preenche campos clínicos sempre que anatom/imagen forem alterados (alimenta APAC + evolução)
@@ -295,6 +316,8 @@ export default function App(){
     novo.evolucao={...(novo.evolucao||{}),rascunho:novo.evolucao?.rascunho||gerarTextoEvolucao(novo)};
     novo.apac=validarAPAC(novo);
     setPac(novoPac);savePacAtual(novoPac);dbSalvarPaciente(novoPac);
+    // F0 — registrar encounter ativo no localStorage para o portão de salvamento
+    openEncounter(createEncounter(novoPac.pacID, _inferirTipoEncounter(novoPac)));
     setDossieOncologico(novo);
     setConsultasDia(x=>x.map(p=>((p.pacID&&p.pacID===novoPac.pacID)||p.nome===novoPac.nome)?{...p,status:"em_consulta",pacID:novoPac.pacID}:p));
     setMedTab("prontuario");setPronTab("consulta");
@@ -332,6 +355,13 @@ export default function App(){
     const texto=String(res||"").trim();
     if(!texto){alert("Nenhum resumo foi gerado para inserir no prontuário.");return false;}
     if(!executarProntuarioSecurity({pac,texto,dossie:dossieOncologico,origem:meta?.tipo||"Upload IA"},addMsg))return false;
+    // F0 — verificar encounter ativo antes de escrever documento no dossiê
+    const _encOk = requireEncounter(pac);
+    if(!_encOk.ok){
+      console.warn("[F0] adicionarDocumentoPadraoDossie bloqueado:", _encOk.reason);
+      alert("⚠ Inicie um atendimento antes de adicionar documentos ao prontuário.\n(" + _encOk.reason + ")");
+      return false;
+    }
     setDossieOncologico(d=>{
       const base=mesmoPacienteDossie(d,pac)?(d||criarDossieInicial(pac)):criarDossieInicial(pac);
       const evolucaoClaude=extrairEvolucaoIA(texto);
@@ -366,6 +396,8 @@ export default function App(){
   const prepararPacienteEmBranco=()=>({...PAC0,pacID:genPacID(),status:"novo"});
   const zerarContextoAtivo=useCallback((motivo="novo_atendimento")=>{
     const anterior=pac;
+    // F0 — fechar encounter ativo antes de limpar contexto
+    closeEncounter();
     limparModuloPacienteStorage(anterior);
     try{
       clearPacAtual?.();
@@ -401,6 +433,8 @@ export default function App(){
       updatedAt:NOW(),
     };
     saveDossiePaciente(finalizado);
+    // F0 — registrar fechamento do encounter no histórico
+    closeEncounter();
     dbSalvarPaciente({...pac,status:"atendimento_concluido",ultimoAtendimentoEncerradoEm:NOW()});
     setConsultasDia(x=>x.map(item=>((item.pacID&&item.pacID===pac.pacID)||nomesPacienteCompativeis(item.nome||item.pac||"",pac.nome))?{...item,status:"atendido",encerradoEm:NOW()}:item));
     setListaEspera(x=>x.map(item=>((item.pacID&&item.pacID===pac.pacID)||nomesPacienteCompativeis(item.nome||item.pac||"",pac.nome))?{...item,status:"atendido",encerradoEm:NOW()}:item));
@@ -820,6 +854,8 @@ export default function App(){
     dbSalvarPaciente(pacientePronto);
     savePacAtual(pacientePronto);
     setPac(pacientePronto);
+    // F0 — recepção cria encounter como draft; médico vai validar
+    openEncounter(createEncounter(pacientePronto.pacID, _inferirTipoEncounter(pacientePronto)));
     setDossieOncologico(d=>{
       const base=d&&mesmoPacienteDossie(d,pacientePronto)?d:criarDossieInicial(pacientePronto);
       const novo=orquestrarDossieAtendimento({...base,paciente:{...(base.paciente||{}),...pacientePronto},status:"recepcao_conferencia",updatedAt:NOW()},"recepcao_confirmacao");
