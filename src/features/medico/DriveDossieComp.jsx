@@ -7,9 +7,10 @@ import { N, G, T, VE, VM, AM } from "../../utils/constants";
 import { sc_, H2, H3, Fld, Btn, NOW, ResumoBullets } from "../../components/ui/primitives";
 import { _apiUrl } from "../../utils/api";
 import {
-  criarDossieInicial, gerarTextoEvolucao, validarAPAC, gerarDossieClaude,
+  criarDossieInicial, gerarDossieClaude,
 } from "../../utils/dossie";
 import { executarProntuarioSecurity } from "../../utils/security";
+import { criarDocumentoClinico, integrarDocumentoNoDossie } from "../../utils/pipeline";
 import { StatusDossieBar } from "./DossieBarComponents";
 
 export default function DriveDossieComp({pac,dossie,setDossie,addMsg}){
@@ -61,22 +62,36 @@ export default function DriveDossieComp({pac,dossie,setDossie,addMsg}){
       });
       const data=await r.json();
       if(!r.ok||!data.ok)throw new Error(data.message||"Falha no backend Drive/Claude.");
-      const docs=(data.arquivos||[]).map(a=>({id:a.id,tipo:a.tipoProvavel||tipo,nome:a.name,link:a.webViewLink,origem:"google_drive",criadoEm:a.createdTime||NOW(),resumo:"Analisado pelo backend"}));
-      if(texto.trim())docs.push({id:Date.now(),tipo,nome:"Texto colado",conteudo:texto,origem:"texto_manual",criadoEm:NOW()});
-      const novo={...(dossie||criarDossieInicial(pac)),paciente:{...(dossie?.paciente||{}),...pac,drive_folder:consultaDrive},documentos:[...docs,...(dossie?.documentos||[])],resumoClaude:data.resumo,status:"pronto_medico",updatedAt:NOW()};
-      novo.evolucao={...(novo.evolucao||{}),rascunho:gerarTextoEvolucao(novo)};
-      novo.apac=validarAPAC(novo);
-      if(!executarProntuarioSecurity({pac,texto:[data.resumo,novo.evolucao?.rascunho].filter(Boolean).join("\n\n"),dossie:novo,origem:"Drive IA"},addMsg))return;
-      setDossie&&setDossie(novo);
+      // Documentos individuais do Drive
+      const docsArquivos=(data.arquivos||[]).map(a=>criarDocumentoClinico({
+        tipo:a.tipoProvavel||tipo,nome:a.name,resumo:"",
+        origem:"google_drive",link:a.webViewLink,
+        extra:{criadoEm:a.createdTime||NOW()},
+      }));
+      if(texto.trim())docsArquivos.push(criarDocumentoClinico({tipo,nome:"Texto colado",resumo:texto,origem:"texto_manual"}));
+      // Documento principal com resumo IA — integrado pelo pipeline
+      const docPrincipal=criarDocumentoClinico({
+        tipo:"Resumo Drive/IA",nome:consultaDrive||"Drive",resumo:data.resumo,origem:"recepcao_drive",
+        extra:{arquivosRelacionados:docsArquivos.map(d=>d.id)},
+      });
+      // Atualiza drive_folder no paciente antes do pipeline
+      const pacComDrive={...pac,drive_folder:consultaDrive};
+      const dossieCom=dossie?{...dossie,paciente:{...(dossie.paciente||{}),...pacComDrive}}:criarDossieInicial(pacComDrive);
+      const novoDossie=integrarDocumentoNoDossie(docPrincipal,{pac:pacComDrive,dossie:dossieCom,setDossie,up:null,addMsg});
+      if(!novoDossie)return;
       setResultado(data.resumo);
       setAchados(prev=>({...prev,folder:data.folder||prev?.folder,files:data.arquivos?.length?data.arquivos:(prev?.files||[])}));
       addMsg&&addMsg("Sistema","Médico","Drive analisado por backend/Claude e vinculado ao dossiê de "+(pac?.nome||"paciente")+".","laudo");
     }catch(e){
-      const doc={id:Date.now(),tipo,nome:consultaDrive||tipo,link:consultaDrive,conteudo:texto,origem:"drive_manual",criadoEm:NOW()};
-      const base={...(dossie||criarDossieInicial(pac)),paciente:{...(dossie?.paciente||{}),...pac,drive_folder:consultaDrive},documentos:[doc,...(dossie?.documentos||[])],status:"documentos_anexados",updatedAt:NOW()};
-      const novo=await gerarDossieClaude(base);
-      if(!executarProntuarioSecurity({pac,texto:[novo?.resumoClaude,novo?.evolucao?.rascunho].filter(Boolean).join("\n\n"),dossie:novo,origem:"Drive IA fallback"},addMsg))return;
-      setDossie&&setDossie(novo);
+      // Fallback: gera dossiê local via Claude direto
+      const docFallback=criarDocumentoClinico({tipo,nome:consultaDrive||tipo,resumo:texto,origem:"drive_manual",link:consultaDrive});
+      const baseFallback={...(dossie||criarDossieInicial(pac)),paciente:{...(dossie?.paciente||{}),...pac,drive_folder:consultaDrive},documentos:[docFallback,...(dossie?.documentos||[])]};
+      const novo=await gerarDossieClaude(baseFallback);
+      const novoDossie=integrarDocumentoNoDossie(
+        criarDocumentoClinico({tipo:"Resumo Drive/IA (fallback)",nome:consultaDrive||"Drive",resumo:novo?.resumoClaude||"",origem:"drive_ia_fallback"}),
+        {pac,dossie:novo,setDossie,up:null,addMsg}
+      );
+      if(!novoDossie)return;
       setResultado(novo.resumoClaude);
       setErro("Backend não respondeu. Usei o fallback local do app: "+e.message);
       addMsg&&addMsg("Sistema","Médico","Drive analisado em modo local e vinculado ao dossiê de "+(pac?.nome||"paciente")+".","laudo");

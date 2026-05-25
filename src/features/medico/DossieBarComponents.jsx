@@ -10,6 +10,7 @@ import {
   criarDossieInicial, orquestrarDossieAtendimento,
   validarAPAC, gerarDocumentosSelecionados,
 } from "../../utils/dossie";
+import { criarDocumentoClinico, integrarDocumentosNoDossie } from "../../utils/pipeline";
 
 const STATUS_DOSSIE=[
   {id:"pre_consulta",label:"Pré-consulta iniciada",cor:T},
@@ -82,13 +83,20 @@ function RecepcaoDossiePanel({pac,dossie,setDossie,upFiles,addMsg,onEnviar}) {
   const [desc,setDesc]=useState("");
   const [agentes,setAgentes]=useState([]);
   const vincular=()=>{
-    const docs=[...(upFiles||[]).map(f=>({id:Date.now()+Math.random(),tipo:f.tp||"Upload",nome:f.n,origem:"recepcao",criadoEm:NOW()}))];
-    if(drive.trim()||desc.trim())docs.push({id:Date.now()+99,tipo:"Google Drive",nome:drive||"Pasta Drive",link:drive,descricao:desc,origem:"recepcao_drive",criadoEm:NOW()});
+    const docs=[
+      ...(upFiles||[]).map(f=>criarDocumentoClinico({tipo:f.tp||"Upload",nome:f.n,resumo:"",origem:"recepcao_upload"})),
+    ];
+    if(drive.trim()||desc.trim())docs.push(criarDocumentoClinico({tipo:"Google Drive",nome:drive||"Pasta Drive",resumo:desc,origem:"recepcao_drive",link:drive||null}));
     if(!docs.length){alert("Anexe arquivo, cole link do Drive ou descreva os documentos.");return;}
-    setDossie&&setDossie(d=>{
-      const base={...(d||criarDossieInicial(pac)),paciente:{...(d?.paciente||{}),...pac},recepcao:{...(d?.recepcao||{}),conferido:true,conferidoEm:NOW(),observacoes:desc},documentos:[...docs,...(d?.documentos||[])],status:"documentos_anexados",updatedAt:NOW()};
-      return orquestrarDossieAtendimento(base,"secretaria_vinculo");
-    });
+    // Pipeline canônico — integra todos os docs de uma vez
+    // Para recepção usamos setDossie com orquestração após integrar
+    const dossieBase=dossie||criarDossieInicial(pac);
+    const dossieComRecepcao={...dossieBase,paciente:{...(dossieBase.paciente||{}),...pac},recepcao:{...(dossieBase.recepcao||{}),conferido:true,conferidoEm:NOW(),observacoes:desc}};
+    const novoDossie=integrarDocumentosNoDossie(docs,{pac,dossie:dossieComRecepcao,setDossie,up:null,addMsg});
+    if(novoDossie){
+      // Orquestra agentes após integração
+      setDossie&&setDossie(()=>orquestrarDossieAtendimento(novoDossie,"secretaria_vinculo"));
+    }
     const ativados=["Prontuário IA","Anti-glosa APAC","Médico","Farmácia","Enfermagem","Secretaria"];
     setAgentes(ativados);
     addMsg&&addMsg("Secretaria","Todos","Dossiê atualizado: upload/documentos vinculados para "+(pac?.nome||"paciente")+". Agentes ativados: "+ativados.join(", ")+".","laudo");

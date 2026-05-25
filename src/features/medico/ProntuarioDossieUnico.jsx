@@ -14,6 +14,7 @@ import {
   limparPlaceholderConsulta, extrairCamposIA, extrairValorResumo,
   extrairSecaoIA, extrairEvolucaoIA, extrairExamesRealizadosTexto,
 } from "../../utils/parse";
+import { criarDocumentoClinico, integrarDocumentoNoDossie } from "../../utils/pipeline";
 import UploadSimples from "../../components/UploadSimples.jsx";
 import { DocumentosPosEvolucao } from "./DossieBarComponents";
 
@@ -210,15 +211,16 @@ export default function ProntuarioDossieUnico({pac,dossie,setDossie,up,addMsg,on
     }finally{setProcessando(false);}
   };
   const adicionarResumoDocumento=(res,meta={})=>{
-    if(!executarProntuarioSecurity({pac,texto:res,dossie,origem:meta.tipo||"Resumo de documento"},addMsg))return;
-    const base=mesmoPacienteDossie(dossie,pac)?(dossie||criarDossieInicial(pac)):criarDossieInicial(pac);
-    const doc={id:Date.now(),tipo:meta.tipo||"Documento",nome:meta.arquivos?.[0]?.n||"Documento analisado",resumo:res,origem:"prontuario_dragdrop",criadoEm:NOW(),exames:extrairExamesRealizadosTexto(res),evolucaoClaude:extrairEvolucaoIA(res)};
-    const novo={...base,paciente:{...(base.paciente||{}),...pac},documentos:[doc,...(base.documentos||[])],resumoClaude:limpar(res),status:"pronto_medico",updatedAt:NOW()};
-    novo.evolucao={...(novo.evolucao||{}),rascunho:montarPaginaProntuario(novo,pac).texto,textoFinal:""};
-    novo.apac=validarAPAC(novo);
-    setDossie&&setDossie(novo);
-    aplicarPagina(novo,pac);
-    setSalvo(false);
+    const dossieBase=mesmoPacienteDossie(dossie,pac)?(dossie||criarDossieInicial(pac)):criarDossieInicial(pac);
+    const doc=criarDocumentoClinico({
+      tipo:meta.tipo||"Documento",
+      nome:meta.arquivos?.[0]?.n||"Documento analisado",
+      resumo:limpar(res),
+      origem:"prontuario_dragdrop",
+      extra:{exames:extrairExamesRealizadosTexto(res),evolucaoClaude:extrairEvolucaoIA(res)},
+    });
+    const novoDossie=integrarDocumentoNoDossie(doc,{pac,dossie:dossieBase,setDossie,up,addMsg});
+    if(novoDossie){aplicarPagina(novoDossie,pac);setSalvo(false);}
   };
   const aplicarResumoExterno=()=>{
     const res=limparMarkdown(resumoExterno||"").trim();
