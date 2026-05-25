@@ -8,6 +8,31 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['src/**/__tests__/**/*.test.{js,jsx,ts,tsx}'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      reportsDirectory: 'coverage',
+      // Auditar apenas os contratos de negocio criticos (utils puras, testáveis sem DOM).
+      // dossie.js e parse.js dependem de localStorage/DOM e aguardam fase de testes dedicada.
+      include: [
+        'src/utils/pipeline.js',
+        'src/utils/apacDeterministico.js',
+        'src/utils/apacValidator.js',
+        'src/utils/security.js',
+      ],
+      exclude: [
+        'src/utils/__tests__/**',
+      ],
+      // Limiares fase de engenharia (pre-hospital).
+      // security.js tem funções de localStorage sem DOM — cobertura limitada em node env.
+      // Aumentar progressivamente conforme testes de dossie/parse forem adicionados.
+      thresholds: {
+        statements: 55,
+        branches:   40,
+        functions:  50,
+        lines:      55,
+      },
+    },
   },
   base: '/apac-oncologia/',
   server: {
