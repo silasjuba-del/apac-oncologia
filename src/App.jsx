@@ -1,33 +1,6 @@
 ﻿import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import FarmaciaPage from './features/farmacia/FarmaciaPage';
-import EnfermagemPage from './features/enfermagem/EnfermagemPage';
-import RecepcaoPage from './features/recepcao/RecepcaoPage';
-import AgendamentoComp from './components/shared/AgendamentoComp';
-import ListaEsperaPrioridade from './components/shared/ListaEsperaPrioridade';
-import ConsultasDiaComp from './components/shared/ConsultasDiaComp';
-import CarteirinhaTab from './features/carteirinha/CarteirinhaTab';
-import SegundaViaTab from './features/recepcao/SegundaViaTab';
-import InboxPaciente from './features/paciente/InboxPaciente';
-import ComunicacaoPage from './features/comunicacao/ComunicacaoPage';
-import AssistenciaSocialPage from './features/assistencia-social/AssistenciaSocialPage';
-import DashboardMedico from './features/medico/DashboardMedico';
-import FilaDiaMedico from './features/medico/FilaDiaMedico';
-import EstatisticasComp from './features/medico/EstatisticasComp';
-import PrescricaoQT from './features/prescricao/PrescricaoQT';
-import ReceitasComp from './features/recepcao/ReceitasComp';
-import SalaoMedico from './features/enfermagem/SalaoMedico';
-import SeletorEquipe from './components/shared/SeletorEquipe';
-import TrialsCompMelhorado from './features/medico/TrialsCompMelhorado';
-import AbaExamesImagem from './features/medico/AbaExamesImagem';
-import AntiGlosaComp from './features/faturamento/AntiGlosaComp';
-import TriagemMedicoRecebe from './features/medico/TriagemMedicoRecebe';
-const DiscussaoClinicaIA=React.lazy(()=>import('./features/medico/DiscussaoClinicaIA'));
-import BuscarPacienteComp from './features/medico/BuscarPacienteComp';
-import DashboardComunicacao from './features/comunicacao/DashboardComunicacao';
-import ExamesProntuario from './features/medico/ExamesProntuario';
-import PrescreverDoenca from './features/medico/PrescreverDoenca';
-import GraficoProducao from './features/medico/GraficoProducao';
-import AtendimentoSegurancaPanel from './components/shared/AtendimentoSegurancaPanel';
+
+// ── Imports EAGER — shell e utilitários usados em todo render ─────────────────
 import {
   sc_, sc, TODAY, NOW,
   Btn, Card, H2, H3, H3b, Fld, Bge, G2, Tbl, Cbox, CampoLinhaCadastro, CampoCadastro,
@@ -35,26 +8,17 @@ import {
   TopBar, Footer, TopBarOld, FooterOld, PrintModal, MicCaptura, ChatAba,
   copiarTexto, limparMarkdown, gerarHTML, abrirDoc,
 } from './components/ui/primitives';
-import PacienteDemograficoForm from './pages/PacienteDemograficoForm';
-import ConferenciaAPAC from './pages/ConferenciaAPAC.jsx';
-import AppRoutes from './features/rotas/AppRoutes.jsx';
-import AberturaScreen from './components/AberturaScreen.jsx';
 import AppShell, { SubTabs as SubTabsV4, BtnV4, AlertBanner as AlertBannerV4, CompletudeMeter, StatusBadge as StatusBadgeV4, TABS_PERFIL } from './components/AppShell.jsx';
 import SeletorAPAC, { SIGTAP as SIGTAP_CATALOGO } from './components/SeletorAPAC.jsx';
-import MedicoProntuario from './pages/MedicoProntuario.jsx';
-import AssistenteIA from './components/AssistenteIA.jsx';
-import BancadaOncologica from './components/oncoagent/BancadaOncologica.jsx';
-import UploadSimples from './components/UploadSimples.jsx';
-import { APACSystem, APACDashboardWidget } from './components/APACSystem.jsx';
-import AgentPanel from './components/AgentPanel.jsx';
-import IATestador from './components/IATestador.jsx';
+import AppRoutes from './features/rotas/AppRoutes.jsx';
 import ReviewBanner from './components/ReviewBanner.jsx';
-import EvolutionTimeline from './components/EvolutionTimeline.jsx';
-import GerenciarPacientes from './components/GerenciarPacientes.jsx';
-import ConsultaDia from './components/ConsultaDia.jsx';
-import ProtocolosQTExplorer from './components/ProtocolosQTExplorer.jsx';
+import {
+  statusDossieMeta,
+  StatusDossieBar, AtendimentosStandbyBar,
+  RecepcaoDossiePanel, DocumentosPosEvolucao,
+} from './features/medico/DossieBarComponents';
+import { APACDossieChecklist, APACEntradaRapida } from './features/medico/APACDossieComps';
 import { chavePaciente } from './features/oncoProUtils.js';
-import BiomarcadoresSelector from './components/shared/BiomarcadoresSelector';
 import {
   normalizaPacienteValor, executarProntuarioSecurity, mesmoPacienteDossie,
   loadDossiePaciente, saveDossiePaciente, limparModuloPacienteStorage,
@@ -70,18 +34,60 @@ import {
   criarDossieInicial, gerarTextoEvolucao, validarAPAC, autoPreencherCamposLaudos,
   orquestrarDossieAtendimento, gerarDocumentosSelecionados, gerarDossieClaude,
 } from './utils/dossie';
-import UploadComIA from './features/medico/UploadComIA';
-import {
-  statusDossieMeta,
-  StatusDossieBar, AtendimentosStandbyBar,
-  RecepcaoDossiePanel, DocumentosPosEvolucao,
-} from './features/medico/DossieBarComponents';
-import { APACDossieChecklist, APACEntradaRapida } from './features/medico/APACDossieComps';
-const DriveDossieComp=React.lazy(()=>import('./features/medico/DriveDossieComp'));
-import { resumoAtendimentoEstruturado, EvolucoesProntuario } from './features/medico/EvolucoesProntuario';
-const ProntuarioDossieUnico=React.lazy(()=>import('./features/medico/ProntuarioDossieUnico'));
-const StepperMedico=React.lazy(()=>import('./features/medico/StepperMedico'));
-const PrimConsultaPaciente=React.lazy(()=>import('./features/medico/PrimConsultaPaciente'));
+
+// ── Imports LAZY — componentes por role / aba / rota ────────────────────────
+// Carregados apenas quando a tab/role correspondente é aberta pela primeira vez.
+const FarmaciaPage         = React.lazy(()=>import('./features/farmacia/FarmaciaPage'));
+const EnfermagemPage       = React.lazy(()=>import('./features/enfermagem/EnfermagemPage'));
+const RecepcaoPage         = React.lazy(()=>import('./features/recepcao/RecepcaoPage'));
+const AgendamentoComp      = React.lazy(()=>import('./components/shared/AgendamentoComp'));
+const ListaEsperaPrioridade= React.lazy(()=>import('./components/shared/ListaEsperaPrioridade'));
+const ConsultasDiaComp     = React.lazy(()=>import('./components/shared/ConsultasDiaComp'));
+const CarteirinhaTab       = React.lazy(()=>import('./features/carteirinha/CarteirinhaTab'));
+const SegundaViaTab        = React.lazy(()=>import('./features/recepcao/SegundaViaTab'));
+const InboxPaciente        = React.lazy(()=>import('./features/paciente/InboxPaciente'));
+const ComunicacaoPage      = React.lazy(()=>import('./features/comunicacao/ComunicacaoPage'));
+const AssistenciaSocialPage= React.lazy(()=>import('./features/assistencia-social/AssistenciaSocialPage'));
+const DashboardMedico      = React.lazy(()=>import('./features/medico/DashboardMedico'));
+const FilaDiaMedico        = React.lazy(()=>import('./features/medico/FilaDiaMedico'));
+const EstatisticasComp     = React.lazy(()=>import('./features/medico/EstatisticasComp'));
+const PrescricaoQT         = React.lazy(()=>import('./features/prescricao/PrescricaoQT'));
+const ReceitasComp         = React.lazy(()=>import('./features/recepcao/ReceitasComp'));
+const SalaoMedico          = React.lazy(()=>import('./features/enfermagem/SalaoMedico'));
+const SeletorEquipe        = React.lazy(()=>import('./components/shared/SeletorEquipe'));
+const TrialsCompMelhorado  = React.lazy(()=>import('./features/medico/TrialsCompMelhorado'));
+const AbaExamesImagem      = React.lazy(()=>import('./features/medico/AbaExamesImagem'));
+const AntiGlosaComp        = React.lazy(()=>import('./features/faturamento/AntiGlosaComp'));
+const TriagemMedicoRecebe  = React.lazy(()=>import('./features/medico/TriagemMedicoRecebe'));
+const DiscussaoClinicaIA   = React.lazy(()=>import('./features/medico/DiscussaoClinicaIA'));
+const BuscarPacienteComp   = React.lazy(()=>import('./features/medico/BuscarPacienteComp'));
+const DashboardComunicacao = React.lazy(()=>import('./features/comunicacao/DashboardComunicacao'));
+const ExamesProntuario     = React.lazy(()=>import('./features/medico/ExamesProntuario'));
+const PrescreverDoenca     = React.lazy(()=>import('./features/medico/PrescreverDoenca'));
+const GraficoProducao      = React.lazy(()=>import('./features/medico/GraficoProducao'));
+const AtendimentoSegurancaPanel = React.lazy(()=>import('./components/shared/AtendimentoSegurancaPanel'));
+const PacienteDemograficoForm   = React.lazy(()=>import('./pages/PacienteDemograficoForm'));
+const ConferenciaAPAC      = React.lazy(()=>import('./pages/ConferenciaAPAC.jsx'));
+const AberturaScreen       = React.lazy(()=>import('./components/AberturaScreen.jsx'));
+const MedicoProntuario     = React.lazy(()=>import('./pages/MedicoProntuario.jsx'));
+const AssistenteIA         = React.lazy(()=>import('./components/AssistenteIA.jsx'));
+const BancadaOncologica    = React.lazy(()=>import('./components/oncoagent/BancadaOncologica.jsx'));
+const UploadSimples        = React.lazy(()=>import('./components/UploadSimples.jsx'));
+const APACSystem           = React.lazy(()=>import('./components/APACSystem.jsx').then(m=>({default:m.APACSystem})));
+const APACDashboardWidget  = React.lazy(()=>import('./components/APACSystem.jsx').then(m=>({default:m.APACDashboardWidget})));
+const AgentPanel           = React.lazy(()=>import('./components/AgentPanel.jsx'));
+const IATestador           = React.lazy(()=>import('./components/IATestador.jsx'));
+const EvolutionTimeline    = React.lazy(()=>import('./components/EvolutionTimeline.jsx'));
+const GerenciarPacientes   = React.lazy(()=>import('./components/GerenciarPacientes.jsx'));
+const ConsultaDia          = React.lazy(()=>import('./components/ConsultaDia.jsx'));
+const ProtocolosQTExplorer = React.lazy(()=>import('./components/ProtocolosQTExplorer.jsx'));
+const BiomarcadoresSelector= React.lazy(()=>import('./components/shared/BiomarcadoresSelector'));
+const UploadComIA          = React.lazy(()=>import('./features/medico/UploadComIA'));
+const EvolucoesProntuario  = React.lazy(()=>import('./features/medico/EvolucoesProntuario').then(m=>({default:m.EvolucoesProntuario})));
+const DriveDossieComp      = React.lazy(()=>import('./features/medico/DriveDossieComp'));
+const ProntuarioDossieUnico= React.lazy(()=>import('./features/medico/ProntuarioDossieUnico'));
+const StepperMedico        = React.lazy(()=>import('./features/medico/StepperMedico'));
+const PrimConsultaPaciente = React.lazy(()=>import('./features/medico/PrimConsultaPaciente'));
 import {
   loadPacAtual, savePacAtual, clearPacAtual,
   loadAiPatches, saveAiPatches,
