@@ -101,11 +101,27 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
 
-      // ── Contrato P0: requireActivePatient ────────────────────────────────
-      // Nota: não é possível enforçar via ESLint padrão sem custom plugin.
-      // A regra abaixo bane o uso de setDossieOncologico como prop em filhos
-      // (detecta padrões suspeitos mas não substitui code review):
-      // 'no-restricted-syntax': ['warn', ...] // ver ROADMAP.md
+      // ── Contrato F0: portão único de salvamento clínico ─────────────────
+      // Nenhum componente escreve prontuário/evolução/prescrição/APAC diretamente.
+      // Todo salvamento clínico passa por saveClinicalArtifact() em clinicalStore.js.
+      //
+      // As regras abaixo detectam as chamadas mais perigosas fora do portão:
+      //   1. setDossieOncologico() / setDossieGuardado() chamados diretamente
+      //   2. saveDossiePaciente() chamado fora de clinicalStore.js
+      //   3. localStorage.setItem com chaves clínicas fora de clinicalStore.js
+      'no-restricted-syntax': [
+        'warn',
+        {
+          // Chama setDossieOncologico(valor) diretamente (não via functional update)
+          selector: "CallExpression[callee.name=/^setDossie(Oncologico|Guardado)$/]",
+          message:  '[F0] Use saveClinicalArtifact() em vez de setDossieOncologico/setDossieGuardado diretamente. Ver clinicalStore.js.',
+        },
+        {
+          // Chama saveDossiePaciente() fora do portão
+          selector: "CallExpression[callee.name='saveDossiePaciente']",
+          message:  '[F0] saveDossiePaciente() é legado. Use saveClinicalArtifact() em clinicalStore.js.',
+        },
+      ],
 
       // ── Estilo (não-bloqueante) ──────────────────────────────────────────
       'eqeqeq': ['warn', 'always', { null: 'ignore' }],
