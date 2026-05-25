@@ -1,0 +1,79 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ci.yml — APACApp oncologia · CI de saúde (fase pré-hospital)
+# Roda em: push para main, push para feature/*, PRs abertos contra main
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Testes unitários + coverage ──────────────────────────────────────────
+  test:
+    name: Testes unitários
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Rodar testes com coverage
+        run: npx vitest run --coverage
+
+      - name: Upload relatório de coverage (HTML)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+  # ── Build de produção ─────────────────────────────────────────────────────
+  build:
+    name: Build Vite
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Build de produção
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Verificar tamanho dos chunks (warn > 600 KB)
+        run: |
+          echo "=== Chunks gerados ==="
+          du -sh dist/assets/*.js 2>/dev/null | sort -rh | head -20 || true
+          echo "=== Build concluído com sucesso ==="
+
+      - name: Upload artefato de build
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
