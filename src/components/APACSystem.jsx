@@ -18,6 +18,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
+import { resolverCampoAPAC, STATUS_META } from '../utils/apacDeterministico';
 
 const N="#1B365D",T="#2B7A8C",G="#B8860B",VE="#15803D",AM="#B45309",VM="#B91C1C";
 const AUTOR="Dr. Silas Negrão Serra Jr.",CRM="17341",UF="PB";
@@ -434,6 +435,7 @@ export function APACSystem({ pac, up, addMsg, apacs, setApacs }) {
       {aba === "checklist" && (
         <ChecklistAPAC
           apac={apacAtual}
+          pac={pac}
           onEditarCampo={(c) => { setCampoEdit(c); setAba("formulario"); }}
           onEnviar={enviarFinanceiro}
           status={apacAtual?.status}
@@ -942,7 +944,14 @@ function FormularioAPAC({ apac, onSalvar, campoEdit, setCampoEdit, onEnviar, sta
 /* ══════════════════════════════════════════════════════════════════
    CHECKLIST APAC — Campos obrigatórios com atalho para preenchimento
 ══════════════════════════════════════════════════════════════════ */
-function ChecklistAPAC({ apac, onEditarCampo, onEnviar, status }) {
+// Mapeamento de campos APACSystem → chaves do resolverCampoAPAC (P3)
+const CAMPO_P3 = {
+  nome: "nome", cns: "cns", nasc: "nasc", mae: "mae", cidade: "cidade",
+  cod_proc: "cod_proc", trat: "trat", cid: "cid", diag: "diag",
+  justif_apac: "justif_apac", data_sol: "data_sol",
+};
+
+function ChecklistAPAC({ apac, pac, onEditarCampo, onEnviar, status }) {
   const campos = apac?.campos || {};
   const secoes = [...new Set(CAMPOS_APAC.map(c => c.secao))];
   const totalObrig = CAMPOS_APAC.filter(c => c.obrig).length;
@@ -950,20 +959,41 @@ function ChecklistAPAC({ apac, onEditarCampo, onEnviar, status }) {
   const pct = Math.round((preenchidos / totalObrig) * 100);
   const pronto = preenchidos === totalObrig;
 
+  // P3 — resolucao por campo para rastreabilidade de fonte
+  const resolucaoP3 = {};
+  if (pac) {
+    Object.entries(CAMPO_P3).forEach(([campoApac, campoP3]) => {
+      try { resolucaoP3[campoApac] = resolverCampoAPAC(campoP3, pac, null); } catch (_) {}
+    });
+  }
+
   return (
     <div style={{ display: "grid", gap: 11 }}>
-      {/* Progress */}
+      {/* Progress + score anti-glosa P3 */}
       <div style={sc.card({ background: pronto ? "#EAF7EE" : "#FFFBEB", border: `1px solid ${pronto ? VE : AM}44` })}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <div>
             <div style={{ fontWeight: 900, fontSize: 14, color: pronto ? VE : AM }}>{pct}% preenchido</div>
             <div style={{ fontSize: 11, color: "#64748B" }}>{preenchidos}/{totalObrig} campos obrigatórios</div>
           </div>
-          {pronto && status === "rascunho" && (
-            <button onClick={onEnviar} style={{ ...sc.btn("gold", { fontSize: 12, padding: "8px 16px" }) }}>
-              📤 Enviar ao Financeiro
-            </button>
-          )}
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {/* Badge de inferidos/inconsistentes P3 */}
+            {Object.values(resolucaoP3).some(r => r?.status === "inferido") && (
+              <span style={{ fontSize: 10, fontWeight: 900, color: "#D97706", background: "#FEF3C7", borderRadius: 999, padding: "3px 9px" }}>
+                🤖 Campos inferidos por IA
+              </span>
+            )}
+            {Object.values(resolucaoP3).some(r => r?.status === "inconsistente") && (
+              <span style={{ fontSize: 10, fontWeight: 900, color: "#7C3AED", background: "#EDE9FE", borderRadius: 999, padding: "3px 9px" }}>
+                ⚠️ Inconsistências
+              </span>
+            )}
+            {pronto && status === "rascunho" && (
+              <button onClick={onEnviar} style={{ ...sc.btn("gold", { fontSize: 12, padding: "8px 16px" }) }}>
+                📤 Enviar ao Financeiro
+              </button>
+            )}
+          </div>
         </div>
         <div style={{ height: 8, background: "#E2E8F0", borderRadius: 999, overflow: "hidden" }}>
           <div style={{ height: "100%", width: pct + "%", background: pronto ? VE : pct > 50 ? AM : VM, borderRadius: 999, transition: "width .3s" }}/>
@@ -987,23 +1017,45 @@ function ChecklistAPAC({ apac, onEditarCampo, onEnviar, status }) {
             <div style={{ display: "grid", gap: 5 }}>
               {itens.map(c => {
                 const preenchido = !!campos[c.campo];
+                // P3 — status da fonte (inferido / inconsistente) se disponivel
+                const p3 = resolucaoP3[c.campo];
+                const p3Meta = p3 && p3.status !== "preenchido" && p3.status !== "ausente"
+                  ? STATUS_META[p3.status] : null;
+                const borderCor = p3?.status === "inconsistente" ? "#7C3AED44"
+                  : preenchido ? VE + "44" : c.obrig ? VM + "44" : "#E2E8F0";
+                const bgCor = p3?.status === "inconsistente" ? "#EDE9FE"
+                  : p3?.status === "inferido" ? "#FFFBEB"
+                  : preenchido ? "#F0FDF4" : c.obrig ? "#FFF5F5" : "#F8FAFC";
                 return (
                   <div key={c.id} style={{
                     display: "flex", gap: 9, alignItems: "center",
-                    border: `1.5px solid ${preenchido ? VE + "44" : c.obrig ? VM + "44" : "#E2E8F0"}`,
+                    border: `1.5px solid ${borderCor}`,
                     borderRadius: 8, padding: "7px 10px",
-                    background: preenchido ? "#F0FDF4" : c.obrig ? "#FFF5F5" : "#F8FAFC",
+                    background: bgCor,
                     cursor: preenchido ? "default" : "pointer",
                   }}
                     onClick={() => !preenchido && onEditarCampo(c.campo)}
                   >
-                    <span style={{ fontSize: 16 }}>{preenchido ? "✅" : c.obrig ? "⚠️" : "○"}</span>
+                    <span style={{ fontSize: 16 }}>{preenchido ? (p3Meta ? p3Meta.icone : "✅") : c.obrig ? "⚠️" : "○"}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 700, fontSize: 11, color: N }}>{c.label}</div>
-                      {preenchido
-                        ? <div style={{ fontSize: 10, color: "#64748B", marginTop: 1 }}>{String(campos[c.campo]).slice(0, 60)}{String(campos[c.campo]).length > 60 ? "..." : ""}</div>
-                        : <div style={{ fontSize: 10, color: c.obrig ? VM : "#94A3B8", marginTop: 1 }}>{c.obrig ? "⚠ Obrigatório — clique para preencher" : "Opcional"}</div>
-                      }
+                      {preenchido ? (
+                        <div style={{ fontSize: 10, color: p3Meta ? p3Meta.cor : "#64748B", marginTop: 1 }}>
+                          {String(campos[c.campo]).slice(0, 55)}{String(campos[c.campo]).length > 55 ? "…" : ""}
+                          {p3Meta && <span style={{ marginLeft: 4, fontWeight: 900 }}>· {p3Meta.label}{p3?.fonte ? ` (${p3.fonte})` : ""}</span>}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 10, color: c.obrig ? VM : "#94A3B8", marginTop: 1 }}>
+                          {p3?.status === "inferido"
+                            ? `🤖 IA sugere: ${String(p3.valor || "").slice(0, 40)} — clique para confirmar`
+                            : c.obrig ? "⚠ Obrigatório — clique para preencher" : "Opcional"}
+                        </div>
+                      )}
+                      {p3?.status === "inconsistente" && p3.valorAlternativo && (
+                        <div style={{ fontSize: 9, color: "#7C3AED", marginTop: 2, fontWeight: 800 }}>
+                          IA sugere: {String(p3.valorAlternativo).slice(0, 40)} via {p3.fonteAlternativa}
+                        </div>
+                      )}
                     </div>
                     {!preenchido && (
                       <button onClick={() => onEditarCampo(c.campo)} style={{ ...sc.btn("teal", { fontSize: 10, padding: "3px 9px", flexShrink: 0 }) }}>
