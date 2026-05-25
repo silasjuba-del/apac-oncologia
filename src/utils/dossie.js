@@ -10,6 +10,7 @@ import {
   extrairEvolucaoIA, extrairCamposIA,
 } from './parse';
 import { chamarClaude } from './api';
+import { resolverAPACCompleta } from './apacDeterministico';
 
 const criarDossieInicial=pac=>({
   id:"DOS-"+Date.now(),
@@ -149,7 +150,9 @@ function validarAPAC(dossie){
   const pendencias=req.filter(([k])=>!campos[k]||String(campos[k]).trim()==="").map(([,l])=>l);
   const criticas=["Nome","CPF","CNS","CID-10","Diagnóstico histológico","Estadiamento","Procedimento SIGTAP","Justificativa clínica"].filter(x=>pendencias.includes(x));
   const riscoGlosa=criticas.length?"alto":pendencias.length?"moderado":"baixo";
-  return {campos,pendencias,criticas,riscoGlosa,completa:pendencias.length===0};
+  // P3 — resolucao deterministica por campo (status + fonte)
+  const resolucao=resolverAPACCompleta(p,dossie);
+  return {campos,pendencias,criticas,riscoGlosa,completa:pendencias.length===0,resolucao};
 }
 // ── Auto-preenchimento de campos clínicos a partir do texto de laudos/AP ─────
 // Extrai diagnóstico, data biópsia, estadiamento, biomarcadores e CID

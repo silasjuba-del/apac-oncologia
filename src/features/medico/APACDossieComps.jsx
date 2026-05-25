@@ -14,18 +14,52 @@ import { normalizaPacienteValor } from "../../utils/security";
 import {
   extrairCamposIA, extrairSecaoIA, extrairValorResumo,
 } from "../../utils/parse";
+import { resolverAPACCompleta, CAMPOS_APAC, STATUS_META } from "../../utils/apacDeterministico";
 
 function APACDossieChecklist({dossie,setDossie}){
   const apac=validarAPAC(dossie||{});
-  useEffect(()=>{if(!(dossie?.paciente?.pacID||dossie?.paciente?.cpf||dossie?.paciente?.cns)){return;}setDossie&&setDossie(d=>({...d,apac,status:apac.completa?"apac_pronta":"apac_validacao",updatedAt:NOW()}));},[apac.pendencias.length]);
+  const pac=dossie?.paciente||{};
+  // P3 — resolucao deterministica por campo
+  const resolucao=apac.resolucao||resolverAPACCompleta(pac,dossie||{});
+  const [expandido,setExpandido]=useState(false);
+  useEffect(()=>{if(!(pac?.pacID||pac?.cpf||pac?.cns)){return;}setDossie&&setDossie(d=>({...d,apac,status:apac.completa?"apac_pronta":"apac_validacao",updatedAt:NOW()}));},[apac.pendencias.length]);
   const cor=apac.riscoGlosa==="alto"?VM:apac.riscoGlosa==="moderado"?AM:VE;
+  const {scoreAntiGlosa,inconsistencias,inferidos}=resolucao;
   return <div style={sc_.card({border:"2px solid "+cor+"55",marginBottom:12})}>
+    {/* Header */}
     <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:8}}>
       <H2 ch="APAC — Validador Anti-Glosa" s={{margin:0,fontSize:14}}/>
-      <span style={{background:cor,color:"#fff",borderRadius:999,padding:"5px 12px",fontSize:10,fontWeight:900}}>{apac.riscoGlosa==="baixo"?"APAC pronta":apac.riscoGlosa==="moderado"?"Pendências moderadas":"Pendências críticas"}</span>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <span style={{fontSize:11,fontWeight:900,color:scoreAntiGlosa>=80?VE:scoreAntiGlosa>=50?AM:VM}}>Score: {scoreAntiGlosa}/100</span>
+        <span style={{background:cor,color:"#fff",borderRadius:999,padding:"5px 12px",fontSize:10,fontWeight:900}}>{apac.riscoGlosa==="baixo"?"APAC pronta":apac.riscoGlosa==="moderado"?"Pendências moderadas":"Pendências críticas"}</span>
+      </div>
     </div>
-    {apac.pendencias.length===0?<p style={{fontSize:12,color:VE,fontWeight:800}}>Checklist completo. APAC liberada para impressão.</p>:<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>{apac.pendencias.map(p=><div key={p} style={{fontSize:11,color:N,background:"#FFF7E6",border:"1px solid "+AM+"55",borderRadius:8,padding:"7px 9px"}}>• {p}</div>)}</div>}
-    {apac.criticas?.length>0&&<p style={{fontSize:11,color:VM,fontWeight:800,marginTop:8}}>Bloqueio: pendências críticas precisam ser resolvidas antes de marcar APAC pronta.</p>}
+    {/* Grid de campos com status P3 */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5,marginBottom:8}}>
+      {CAMPOS_APAC.map(({campo,label,req})=>{
+        const r=resolucao.campos?.[campo]||{status:"ausente",fonte:null,valor:null};
+        const meta=STATUS_META[r.status]||STATUS_META.ausente;
+        return <div key={campo} style={{background:meta.bg,border:"1px solid "+meta.cor+"44",borderRadius:8,padding:"6px 8px",position:"relative"}}>
+          <div style={{fontSize:9,color:"#64748B",fontWeight:900,textTransform:"uppercase",marginBottom:2}}>{label}{req?<span style={{color:VM}}> *</span>:""}</div>
+          <div style={{display:"flex",alignItems:"center",gap:4}}>
+            <span style={{fontSize:11}}>{meta.icone}</span>
+            <span style={{fontSize:10,color:meta.cor,fontWeight:900}}>{meta.label}</span>
+          </div>
+          {r.valor&&<div style={{fontSize:9,color:"#64748B",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%"}} title={String(r.valor)}>{String(r.valor).slice(0,28)}{String(r.valor).length>28?"…":""}</div>}
+          {r.fonte&&<div style={{fontSize:8,color:"#94A3B8",marginTop:1}}>{r.fonte}</div>}
+          {r.status==="inconsistente"&&r.valorAlternativo&&<div style={{fontSize:8,color:"#7C3AED",marginTop:1}} title={"IA sugere: "+r.valorAlternativo}>IA: {String(r.valorAlternativo).slice(0,18)}</div>}
+        </div>;
+      })}
+    </div>
+    {/* Alertas resumidos */}
+    {inconsistencias.length>0&&<div style={{background:"#EDE9FE",border:"1px solid #7C3AED44",borderRadius:8,padding:"7px 10px",marginBottom:6,fontSize:11,color:"#7C3AED",fontWeight:800}}>
+      ⚠️ Inconsistências — revise: {inconsistencias.join(", ")}
+    </div>}
+    {inferidos.length>0&&<div style={{background:"#FEF3C7",border:"1px solid "+AM+"44",borderRadius:8,padding:"7px 10px",marginBottom:6,fontSize:11,color:AM,fontWeight:800}}>
+      🤖 Inferidos por IA — confirme antes de imprimir: {inferidos.join(", ")}
+    </div>}
+    {apac.pendencias.length===0?<p style={{fontSize:12,color:VE,fontWeight:800,margin:0}}>Checklist completo. APAC liberada para impressão.</p>:
+      <p style={{fontSize:11,color:VM,fontWeight:800,margin:0}}>Pendências obrigatórias: {apac.pendencias.join(" · ")}</p>}
   </div>;
 }
 
