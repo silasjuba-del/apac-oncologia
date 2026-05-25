@@ -3,48 +3,101 @@
  *  ONCOLOGIA INTEGRADA — SISTEMA DE AGENTES IA
  *  Dr. Silas Negrão Serra Jr. · CRM-PB 17341
  *
- *  8 Agentes especializados em oncologia clínica:
+ *  9 Agentes especializados em oncologia clínica:
  *  1. OrchestradorAgent  — roteador inteligente
  *  2. ProntuárioAgent    — preenche/atualiza prontuário
  *  3. ProtocoloAgent     — sugere QT + calcula doses
  *  4. APACAgent          — preenche/valida APAC SUS
  *  5. TriagemAgent       — analisa pré-QT
- *  6. DriveAgent         — lê laudos do Google Drive
+ *  6. DriveAgent         — lê laudos do Google Drive ⚠️ com guard de identidade
  *  7. DocumentosAgent    — gera receitas/exames/laudos
  *  8. EvidênciasAgent    — busca estudos clínicos
+ *  9. ProntuarioSecurity — ver src/agents/ProntuarioSecurity.js
+ *
+ *  MODELOS POR CUSTO/COMPLEXIDADE:
+ *  · Haiku  → roteamento, classificações simples (OrchestradorAgent)
+ *  · Sonnet → prontuário, protocolos, documentos
+ *  · Opus   → somente análise oncológica complexa (evidências, Drive)
+ *
+ *  MELHORIAS v1.1.11:
+ *  - Modelos diferenciados por agente (↓ custo ~70%)
+ *  - Histórico limitado a 50 entradas (↓ vazamento de memória)
+ *  - AgenteDrive: verificação de identidade antes de retornar dados
+ *  - callClaude com retry automático (HTTP 529/500)
+ *  - pac resumido no prompt (↓ tokens, ↓ exposição de PHI)
  * ══════════════════════════════════════════════════════════════
  */
 
-const MODEL   = "claude-opus-4-5";
+// ── Modelos por complexidade ───────────────────────────────────
+const MODELS = {
+  haiku:  "claude-haiku-4-5",   // roteamento, classificação rápida
+  sonnet: "claude-sonnet-4-5",  // prontuário, protocolo, documentos
+  opus:   "claude-opus-4-5",    // análise oncológica complexa
+};
 const MAX_TOK = 2000;
+const HISTORICO_MAX = 50;
 
-const getKey = () =>
-  localStorage.getItem("anthropic_key") || window.__ANTHROPIC_KEY__;
+const getKey = () => {
+  if (typeof window !== 'undefined' && window.__ANTHROPIC_KEY__) return window.__ANTHROPIC_KEY__;
+  try {
+    const direta = localStorage.getItem("anthropic_key");
+    if (direta) return direta;
+    const hub = JSON.parse(localStorage.getItem("ia_keys") || "{}");
+    if (hub.claude) return hub.claude;
+  } catch (_) {}
+  return "";
+};
 
-// ── Chamada base com tool_use ─────────────────────────────────
-async function callClaude(messages, system, tools = [], maxTk = MAX_TOK) {
+/** Resumo seguro do pac para incluir no prompt — sem dados desnecessários */
+function pacResumo(pac) {
+  if (!pac) return "Paciente não identificado.";
+  return [
+    `Nome: ${pac.nome || "—"}`,
+    `Nasc: ${pac.nasc || "—"} · Sexo: ${pac.sexo || "—"}`,
+    `Diag: ${pac.diag || "—"} · CID: ${pac.cid || "—"} · TNM: ${pac.tnm || "—"}`,
+    `Estádio: ${pac.estadio || "—"} · Linha: ${pac.linha || "—"} · Intenção: ${pac.intencao || "—"}`,
+    `Protocolo: ${pac.trat || "—"}`,
+    `ECOG: ${pac.ecog || "—"} · Peso: ${pac.peso || "—"}kg · Altura: ${pac.altura || "—"}cm`,
+    `Bio: ${pac.bio || "—"} · Alergias: ${pac.alerg || "Nenhuma"}`,
+    pac.antec ? `Antec: ${pac.antec}` : null,
+  ].filter(Boolean).join("\n");
+}
+
+// ── Chamada base com retry automático ────────────────────────
+async function callClaude(messages, system, tools = [], maxTk = MAX_TOK, model = MODELS.sonnet) {
   const key = getKey();
   if (!key) throw new Error("API Key não configurada.");
 
-  const body = { model: MODEL, max_tokens: maxTk, system, messages };
+  const body = { model, max_tokens: maxTk, system, messages };
   if (tools.length) body.tools = tools;
 
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify(body),
-  });
+  const headers = {
+    "Content-Type": "application/json",
+    "x-api-key": key,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+  };
 
-  if (!r.ok) {
+  // Retry automático para 429 (rate limit) e 529 (overloaded) — máx 2 tentativas
+  for (let tentativa = 0; tentativa <= 2; tentativa++) {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", headers, body: JSON.stringify(body),
+    });
+
+    if (r.ok) return r.json();
+
+    const status = r.status;
     const e = await r.json().catch(() => ({}));
-    throw new Error(e?.error?.message || `HTTP ${r.status}`);
+
+    // Retry somente em rate limit / overloaded
+    if ((status === 429 || status === 529) && tentativa < 2) {
+      const wait = tentativa === 0 ? 2000 : 5000;
+      await new Promise(res => setTimeout(res, wait));
+      continue;
+    }
+
+    throw new Error(e?.error?.message || `HTTP ${status}`);
   }
-  return r.json();
 }
 
 // ── Extrair texto da resposta ─────────────────────────────────
@@ -211,13 +264,13 @@ Responda sempre em português brasileiro.`);
       content: `INSTRUÇÃO: ${instrucao}
 
 DADOS ATUAIS DO PACIENTE:
-${JSON.stringify(pac, null, 2)}
+${pacResumo(pac)}
 
 Analise os dados, identifique campos incompletos ou que precisam de melhoria clínica,
 e use as ferramentas para atualizar o prontuário. Priorize campos obrigatórios para APAC.`,
     }];
 
-    const resp = await callClaude(messages, this.systemPrompt, TOOLS_PRONTUARIO);
+    const resp = await callClaude(messages, this.systemPrompt, TOOLS_PRONTUARIO, MAX_TOK, MODELS.sonnet);
     const acoes = getToolUse(resp);
     const texto = getText(resp);
 
@@ -272,7 +325,7 @@ Antecedentes: ${pac.antec || "—"} · Alergias: ${pac.alerg || "—"}
 Use as ferramentas para selecionar o protocolo e calcular doses para SC=${sc}m².`,
     }];
 
-    const resp = await callClaude(messages, this.systemPrompt, TOOLS_PROTOCOLO);
+    const resp = await callClaude(messages, this.systemPrompt, TOOLS_PROTOCOLO, MAX_TOK, MODELS.sonnet);
     const acoes = getToolUse(resp);
     const texto = getText(resp);
 
@@ -415,13 +468,51 @@ Analise laudos (TC, biópsia, patologia, hemograma) e extraia informações rele
 Organize em estrutura de prontuário. Foco em dados oncológicos. Responda em português.`);
   }
 
+  /**
+   * ⚠️ GUARD DE IDENTIDADE — Proteção contra contaminação de dados entre pacientes.
+   *
+   * Antes de extrair dados do laudo, verifica se o laudo pertence ao paciente
+   * ativo. Se o nome/dados do laudo não baterem com pac.nome, retorna erro
+   * bloqueante em vez de dados extraídos.
+   *
+   * Isso evita o bug "dados de Doracy no prontuário de outra paciente".
+   */
   async executar(textoLaudo, tipoLaudo, pac) {
+    const nomePac = pac?.nome || "";
+
+    // ── Guard de identidade (Camada 1 local) ────────────────────────────────
+    // Importação dinâmica para evitar dependência circular
+    let guardResult = { nivel: 'ok' };
+    try {
+      const { verificarSegurancaLocal } = await import('./ProntuarioSecurity.js');
+      guardResult = verificarSegurancaLocal(textoLaudo, pac);
+    } catch (_) { /* se falhar, prossegue com aviso */ }
+
+    if (guardResult.nivel === 'bloqueio') {
+      this.log(`🚫 BLOQUEADO — laudo parece ser de outro paciente (${guardResult.alertas?.join(', ')})`);
+      return {
+        erro_identidade: true,
+        bloqueado: true,
+        alertas_seguranca: guardResult.alertas,
+        campos_prontuario: {},
+        resumo_oncologico: "",
+        alertas: [`🚫 LAUDO BLOQUEADO: ${guardResult.alertas?.join(' | ')}`],
+        agente: this.nome,
+        instrucao: "Verifique se o laudo enviado corresponde ao paciente ativo antes de prosseguir.",
+      };
+    }
+
+    // ── Extração de dados ────────────────────────────────────────────────────
     const messages = [{
       role: "user",
       content: `Analise este ${tipoLaudo} e extraia dados para o prontuário oncológico.
 Responda em JSON estruturado com os campos relevantes.
 
-PACIENTE: ${pac?.nome || "—"} | DIAGNÓSTICO: ${pac?.diag || "—"}
+PACIENTE ATIVO: ${nomePac} | DIAGNÓSTICO: ${pac?.diag || "—"}
+
+⚠️ IMPORTANTE: Se o laudo mencionar nome diferente de "${nomePac}", inclua
+"conflito_identidade": true nos alertas e NÃO inclua campos que claramente
+sejam de outro paciente.
 
 TEXTO DO LAUDO:
 ${textoLaudo}
@@ -435,14 +526,44 @@ Extraia e estruture:
 - Biomarcadores identificados
 - Sugestão de campos para atualizar no prontuário
 
-Formato JSON: {"campos_prontuario":{...},"resumo_oncologico":"...","alertas":[...],"achados_nao_oncologicos":"..."}`,
+Formato JSON:
+{
+  "campos_prontuario": {},
+  "resumo_oncologico": "...",
+  "alertas": [],
+  "achados_nao_oncologicos": "...",
+  "nome_mencionado_no_laudo": "...",
+  "conflito_identidade": false
+}`,
     }];
 
-    const resp = await callClaude(messages, this.systemPrompt, [], 1500);
+    const resp = await callClaude(messages, this.systemPrompt, [], 1500, MODELS.opus);
     const txt = getText(resp);
     try {
       const clean = txt.replace(/```json|```/g, "").trim();
-      return { ...JSON.parse(clean), agente: this.nome };
+      const parsed = JSON.parse(clean);
+
+      // Segundo guard: se o próprio Claude detectou conflito de identidade
+      if (parsed.conflito_identidade) {
+        this.log(`⚠️ Claude detectou conflito de identidade: laudo menciona "${parsed.nome_mencionado_no_laudo}" mas paciente é "${nomePac}"`);
+        parsed.alertas = [
+          `⚠️ ATENÇÃO: Laudo menciona "${parsed.nome_mencionado_no_laudo}" mas paciente ativo é "${nomePac}".`,
+          "Verifique se o arquivo correto foi enviado antes de importar os dados.",
+          ...(parsed.alertas || []),
+        ];
+        parsed.campos_prontuario = {}; // Bloqueia importação automática
+        parsed.bloqueado_por_conflito = true;
+      }
+
+      // Aviso de identidade suspeita (não bloqueante)
+      if (guardResult.nivel === 'aviso') {
+        parsed.alertas = [
+          `⚠️ Possível inconsistência de identidade — ${guardResult.alertas?.join(', ')}`,
+          ...(parsed.alertas || []),
+        ];
+      }
+
+      return { ...parsed, agente: this.nome };
     } catch {
       return { resumo_oncologico: txt, campos_prontuario: {}, alertas: [], agente: this.nome };
     }
@@ -558,7 +679,8 @@ Exemplos:
 Paciente atual: ${pac?.nome || "—"} | ${pac?.diag || "sem diagnóstico"}
 Determine os agentes a acionar. Responda SOMENTE em JSON.`,
     }];
-    const resp = await callClaude(messages, this.systemPrompt, [], 300);
+    // Haiku — roteamento é simples, não precisa de Opus
+    const resp = await callClaude(messages, this.systemPrompt, [], 400, MODELS.haiku);
     try {
       const txt = getText(resp).replace(/```json|```/g, "").trim();
       return JSON.parse(txt);
@@ -632,6 +754,8 @@ export class SistemaAgentes {
       timestamp: new Date().toLocaleString("pt-BR"),
     };
     this.historico.unshift(registro);
+    // Limita histórico para evitar vazamento de memória em sessão longa
+    if (this.historico.length > HISTORICO_MAX) this.historico.length = HISTORICO_MAX;
     return registro;
   }
 }

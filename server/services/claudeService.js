@@ -208,10 +208,11 @@ export async function gerarDossie({ paciente, recepcao, textosLaudos = [] }) {
 Você é o assistente clínico do Dr. Silas Negrão, Oncologista Clínico,
 Hospital do Bem — Unidade Oncológica, Patos-PB.
 
-Analise os dados abaixo e gere um DOSSIÊ ONCOLÓGICO ESTRUTURADO.
+Analise os dados abaixo e gere um DOSSIÊ ONCOLÓGICO ESTRUTURADO em bullets.
 Siga EXATAMENTE o formato com os marcadores ===SEÇÃO=== indicados.
 NÃO invente dados ausentes. Se ausente: escreva "Não informado."
 NUNCA preencha o campo CONDUTA.
+Dentro de cada seção, use linhas curtas iniciadas por "•". Evite parágrafos longos.
 
 ============================================================
 DADOS DO FORMULÁRIO DO PACIENTE
@@ -428,12 +429,17 @@ export async function resumirLaudo({ tipo, data, mimeType, base64Data, textoExtr
 
 function promptLaudo(tipo, data) {
   return `Você é assistente oncológico do Dr. Silas Negrão, Hospital do Bem, Patos-PB.
-Analise este laudo e gere resumo OBJETIVO em 3–5 linhas com foco oncológico.
+Analise este laudo e gere resumo OBJETIVO em bullets com foco oncológico.
 Tipo: ${tipo || "exame"} | Data: ${data || "não informada"}
 Foco: topografia + dimensões + invasão + linfonodos + metástases (imagem)
       histologia + grau + margem + mitoses (biópsia) | captação + local (PET)
 Se sem doença: "Sem evidência de doença ativa."
-Formato: [DATA] — [TIPO]: [resumo]
+Formato obrigatório:
+• Data:
+• Tipo:
+• Achados oncológicos:
+• Estadiamento/biomarcadores se disponíveis:
+• Pendências:
 Sem "gerado por IA".`;
 }
 

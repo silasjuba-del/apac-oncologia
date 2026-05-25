@@ -99,6 +99,138 @@ const MOTIVOS_GLOSA=[
   "Outro (especificar nas observações)",
 ];
 
+const SUPORTE_APAC = {
+  filgrastim: {
+    codigo: "",
+    nome: "Filgrastim / G-CSF — confirmar código SIGTAP com faturamento",
+  },
+  zoledronico: {
+    codigo: "0304040010",
+    nome: "Ácido zoledrônico 4mg EV — suporte ósseo / hipercalcemia / metástase óssea",
+  },
+};
+
+function valorLimpo(v) {
+  const t = String(v ?? "").trim();
+  if (!t) return "";
+  if (/^(—|-|nao informado|não informado|a definir|sem dados)$/i.test(t)) return "";
+  return t;
+}
+
+function primeiroValor(...vals) {
+  return vals.map(valorLimpo).find(Boolean) || "";
+}
+
+function codigoLimpo(v) {
+  return String(v || "").replace(/\D/g, "");
+}
+
+function textoContextoPaciente(pac = {}) {
+  return [
+    pac.trat, pac.conduta, pac.justif_apac, pac.exames_resumo, pac.docs_ia_resumo,
+    pac.docs_drive_resumo, pac.obs_ia, pac.bio, pac.estadio, pac.diag,
+    ...(Array.isArray(pac.evolucoes) ? pac.evolucoes.map(e => e?.texto || "") : []),
+  ].filter(Boolean).join("\n").toLowerCase();
+}
+
+function enderecoAPAC(pac = {}, campos = {}) {
+  const composto = [
+    pac.tipo_logradouro,
+    pac.logradouro,
+    pac.numero ? "nº " + pac.numero : "",
+    pac.bairro ? "Bairro " + pac.bairro : "",
+  ].filter(Boolean).join(", ");
+  return primeiroValor(pac.endereco, composto, campos.endereco);
+}
+
+function examesResumoAPAC(pac = {}, campos = {}) {
+  const imagem = Array.isArray(pac.exames_imagem)
+    ? pac.exames_imagem.map(e => `${e.data || e.dataExame || ""} ${e.nome || e.tipo || "Exame"}: ${e.resumo || e.resultado || e.laudo || ""}`.trim()).filter(Boolean).join("\n")
+    : "";
+  const labs = Array.isArray(pac.lab_rows)
+    ? pac.lab_rows.filter(r => r.neutro || r.plt || r.hgb || r.creat).map(r => `Lab ${r.data || ""}: Neutro ${r.neutro || "—"}; PLT ${r.plt || "—"}; Hb ${r.hgb || "—"}; Creat ${r.creat || "—"}`).join("\n")
+    : "";
+  return primeiroValor(
+    pac.exames_resumo,
+    imagem,
+    pac.anatom,
+    pac.imagen,
+    pac.docs_ia_resumo,
+    pac.docs_drive_resumo,
+    labs,
+    campos.exames_resumo
+  );
+}
+
+function modeloExameFisicoAPAC(pac = {}, campos = {}) {
+  return primeiroValor(pac.exFisico, campos.exFisico) || [
+    "Paciente em regular estado geral, vígil e responsivo, hipotrófico, eupneico, acianótico e anictérico.",
+    "Aparelho cardiovascular: BNF em 2 tempos, sem sopros audíveis.",
+    "Aparelho respiratório: murmúrio vesicular presente em todos os campos, sem sinais de esforço respiratório.",
+    "Abdome flácido, indolor à palpação, sem sinais de irritação peritoneal.",
+    "MMII com edema discreto, sem sinais clínicos de trombose venosa profunda no momento.",
+    `Performance status ECOG ${valorLimpo(pac.ecog) || "__"}, compatível com terapia sistêmica após validação médica.`,
+  ].join("\n");
+}
+
+function justificativaAPAC(pac = {}, campos = {}) {
+  const diag = primeiroValor(pac.diag, campos.diag, "neoplasia maligna");
+  const cid = primeiroValor(pac.cid, campos.cid);
+  const estadio = primeiroValor(pac.estadio, pac.tnm, campos.estadiamento);
+  const trat = primeiroValor(pac.trat, campos.trat, "tratamento sistêmico oncológico");
+  const linha = primeiroValor(pac.linha, campos.linha_protocolo);
+  const intencao = primeiroValor(pac.intencao, campos.intencao);
+  return primeiroValor(pac.justif_apac, pac.conduta, campos.justif_apac) || [
+    `Necessidade de tratamento quimioterápico/sistêmico devido a ${diag}${cid ? ` (${cid})` : ""}.`,
+    estadio ? `Estadiamento/risco informado: ${estadio}.` : "",
+    `Protocolo/procedimento solicitado: ${trat}${linha ? `, ${linha}` : ""}${intencao ? `, intenção ${intencao}` : ""}.`,
+    "Solicitação baseada em avaliação clínica, laudos anexados e indicação terapêutica oncológica, com validação médica antes do envio à farmácia/faturamento.",
+  ].filter(Boolean).join(" ");
+}
+
+function montarCamposAutomaticosAPAC(pac = {}, campos = {}) {
+  const contexto = textoContextoPaciente(pac);
+  const usaFilgrastim = /filgrastim|g[\s-]?csf|neutropenia|dose[\s-]?densa/.test(contexto);
+  const usaZoledronico = /zoledr|zometa|met[aá]stase[s]?\s+[oó]ssea|m1\s+[oó]sseo|hipercalcemia/.test(contexto);
+  const proc2 = usaFilgrastim ? SUPORTE_APAC.filgrastim : usaZoledronico ? SUPORTE_APAC.zoledronico : null;
+  const proc3 = usaFilgrastim && usaZoledronico ? SUPORTE_APAC.zoledronico : null;
+  return {
+    nome: primeiroValor(pac.nome, campos.nome),
+    pacID: primeiroValor(pac.pacID, pac.prontuario, campos.pacID),
+    cns: primeiroValor(pac.cns, campos.cns),
+    nasc: primeiroValor(pac.nasc, pac.data_nascimento, campos.nasc),
+    sexo: primeiroValor(pac.sexo, campos.sexo),
+    raca: primeiroValor(pac.raca, pac.raca_cor, campos.raca),
+    mae: primeiroValor(pac.mae, campos.mae),
+    tel: primeiroValor(pac.tel, pac.telefone_celular, pac.whatsapp, campos.tel),
+    endereco: enderecoAPAC(pac, campos),
+    cidade: primeiroValor(pac.municipioResidencia, pac.cidade, pac.municipio, campos.cidade),
+    municipio_cod: primeiroValor(pac.municipio_cod, pac.codigo_ibge, campos.municipio_cod),
+    uf: primeiroValor(pac.uf, campos.uf, "PB"),
+    cep: primeiroValor(pac.cep, campos.cep),
+    cod_proc: primeiroValor(codigoLimpo(pac.cod_proc), codigoLimpo(campos.cod_proc), "0304010072"),
+    trat: primeiroValor(pac.trat, campos.trat, "Tratamento sistêmico oncológico"),
+    qtde: primeiroValor(pac.qtde, campos.qtde, "1"),
+    cid: primeiroValor(pac.cid, pac.cid_sugerido, campos.cid),
+    cid_sec: primeiroValor(pac.cid_sec, campos.cid_sec),
+    cid_causas: primeiroValor(pac.cid_causas, campos.cid_causas),
+    diag: primeiroValor(pac.diag, campos.diag),
+    exFisico: modeloExameFisicoAPAC(pac, campos),
+    exames_resumo: examesResumoAPAC(pac, campos),
+    justif_apac: justificativaAPAC(pac, campos),
+    cod_proc_2: proc2 ? proc2.codigo : primeiroValor(campos.cod_proc_2),
+    trat_2: proc2 ? proc2.nome : primeiroValor(campos.trat_2),
+    qtde_2: proc2 ? "1" : primeiroValor(campos.qtde_2),
+    cod_proc_3: proc3 ? proc3.codigo : primeiroValor(campos.cod_proc_3),
+    trat_3: proc3 ? proc3.nome : primeiroValor(campos.trat_3),
+    qtde_3: proc3 ? "1" : primeiroValor(campos.qtde_3),
+    prof_solicitante: primeiroValor(campos.prof_solicitante, AUTOR),
+    data_sol: primeiroValor(pac.data_sol, campos.data_sol, TODAY()),
+    nome_executante: primeiroValor(campos.nome_executante, HOSP),
+    cnes_executante: primeiroValor(campos.cnes_executante, CNES_HOSP),
+  };
+}
+
 /* ══════════════════════════════════════════════════════════════════
    COMPONENTE PRINCIPAL — APAC SYSTEM
 ══════════════════════════════════════════════════════════════════ */
@@ -107,15 +239,23 @@ export function APACSystem({ pac, up, addMsg, apacs, setApacs }) {
   const [apacAtual, setApacAtual] = useState(null);
   const [campoEdit, setCampoEdit] = useState(null); // campo sendo editado no checklist
 
-  /* Inicializar ou carregar APAC do paciente */
+  /* Inicializar ou carregar APAC do paciente; re-sincroniza campos clínicos quando chegam da IA */
   useEffect(() => {
     if (!pac?.nome) return;
     const existente = (apacs || []).find(a => a.pacID === (pac.pacID || pac.nome));
-    if (existente) setApacAtual(existente);
-    else criarNovaAPAC();
-  }, [pac?.nome]);
+    const auto = montarCamposAutomaticosAPAC(pac, existente?.campos || {});
+    if (existente) {
+      // Mesclar novos dados do pac sem sobrescrever edits do usuário
+      const mescla = { ...existente, campos: { ...existente.campos } };
+      const merge = (k, v) => { if (valorLimpo(v) && !valorLimpo(mescla.campos[k])) mescla.campos[k] = v; };
+      Object.entries(auto).forEach(([k, v]) => merge(k, v));
+      setApacAtual(mescla);
+      setApacs && setApacs(x => x.map(a => a.id === mescla.id ? mescla : a));
+    } else criarNovaAPAC();
+  }, [pac?.nome, pac?.pacID, pac?.diag, pac?.cid, pac?.trat, pac?.estadio, pac?.cod_proc, pac?.endereco, pac?.cidade, pac?.municipio_cod, pac?.cep, pac?.exFisico, pac?.exames_resumo, pac?.justif_apac, pac?.docs_ia_resumo, pac?.docs_drive_resumo]);
 
   const criarNovaAPAC = () => {
+    const auto = montarCamposAutomaticosAPAC(pac, {});
     const nova = {
       id: "APAC-" + Date.now(),
       pacID: pac?.pacID || pac?.nome || "novo",
@@ -155,7 +295,7 @@ export function APACSystem({ pac, up, addMsg, apacs, setApacs }) {
         diag: pac?.diag || "",
         exFisico: pac?.exFisico || "",
         exames_resumo: (pac?.anatom || "") + (pac?.imagen ? "\nImagem: " + pac.imagen : "") + (pac?.lab_rows?.filter(r => r.neutro)?.map(r => `\nLab ${r.data}: Neutro=${r.neutro} PLT=${r.plt} Hgb=${r.hgb}`)?.join("") || ""),
-        justif_apac: pac?.conduta || "",
+        justif_apac: pac?.justif_apac || pac?.conduta || "",
         // Solicitação
         prof_solicitante: AUTOR,
         crm_solicitante: "CRM-" + UF + " " + CRM,
@@ -168,10 +308,25 @@ export function APACSystem({ pac, up, addMsg, apacs, setApacs }) {
         // Executante
         nome_executante: HOSP,
         cnes_executante: CNES_HOSP,
+        ...auto,
       },
     };
     setApacAtual(nova);
     setApacs && setApacs(x => [...(x || []).filter(a => a.pacID !== nova.pacID), nova]);
+  };
+
+  const aplicarCamposAutomaticos = (campos, origem = "Preenchimento automático") => {
+    if (!apacAtual) return;
+    const limpos = Object.fromEntries(Object.entries(campos || {}).filter(([, v]) => valorLimpo(v)));
+    const atualizado = {
+      ...apacAtual,
+      campos: { ...apacAtual.campos, ...limpos },
+      historico: [...(apacAtual.historico || []), { dt: TODAY(), acao: origem, por: AUTOR }],
+    };
+    setApacAtual(atualizado);
+    setApacs && setApacs(x => x.map(a => a.id === atualizado.id ? atualizado : a));
+    Object.entries(limpos).forEach(([k, v]) => up && up(k, v));
+    addMsg && addMsg("APAC", "Médico", `${origem}: ${Object.keys(limpos).length} campo(s) preenchido(s).`, "apac");
   };
 
   const salvarCampo = (chave, valor) => {
@@ -208,6 +363,7 @@ export function APACSystem({ pac, up, addMsg, apacs, setApacs }) {
   };
 
   const ABAS_APAC = [
+    ["auto",       "🤖 Preenchimento automático"],
     ["formulario", "📄 Formulário APAC"],
     ["checklist",  "✅ Checklist"],
     ["status",     "📊 Status"],
@@ -257,6 +413,14 @@ export function APACSystem({ pac, up, addMsg, apacs, setApacs }) {
         ))}
       </div>
 
+      {aba === "auto" && (
+        <PreenchimentoAutomaticoAPAC
+          pac={pac}
+          apac={apacAtual}
+          onAplicar={aplicarCamposAutomaticos}
+          onIrFormulario={() => setAba("formulario")}
+        />
+      )}
       {aba === "formulario" && (
         <FormularioAPAC
           apac={apacAtual}
@@ -299,13 +463,154 @@ export function APACSystem({ pac, up, addMsg, apacs, setApacs }) {
   );
 }
 
+function PreenchimentoAutomaticoAPAC({ pac, apac, onAplicar, onIrFormulario }) {
+  const [abaAuto, setAbaAuto] = useState("todos");
+  const auto = montarCamposAutomaticosAPAC(pac, apac?.campos || {});
+  const [manual, setManual] = useState({
+    cod2: auto.cod_proc_2 || "",
+    trat2: auto.trat_2 || "",
+    qtde2: auto.qtde_2 || "1",
+    cod3: auto.cod_proc_3 || "",
+    trat3: auto.trat_3 || "",
+    qtde3: auto.qtde_3 || "1",
+  });
+
+  const bloco = {
+    endereco: {
+      titulo: "Endereço",
+      campos: {
+        endereco: auto.endereco,
+        cidade: auto.cidade,
+        municipio_cod: auto.municipio_cod,
+        uf: auto.uf,
+        cep: auto.cep,
+      },
+      texto: [
+        `Endereço: ${auto.endereco || "pendente"}`,
+        `Município: ${auto.cidade || "pendente"}`,
+        `IBGE: ${auto.municipio_cod || "pendente"}`,
+        `UF/CEP: ${auto.uf || "PB"} / ${auto.cep || "pendente"}`,
+      ].join("\n"),
+    },
+    anamnese: {
+      titulo: "Resumo da anamnese e exame físico",
+      campos: { exFisico: auto.exFisico },
+      texto: auto.exFisico,
+    },
+    exames: {
+      titulo: "Exames complementares realizados",
+      campos: { exames_resumo: auto.exames_resumo },
+      texto: auto.exames_resumo || "Nenhum exame estruturado encontrado. Cole/adicione laudos no dossiê ou preencha manualmente.",
+    },
+    justificativa: {
+      titulo: "Justificativa do procedimento",
+      campos: { diag: auto.diag, cid: auto.cid, justif_apac: auto.justif_apac },
+      texto: auto.justif_apac,
+    },
+    procedimento: {
+      titulo: "Procedimento principal",
+      campos: { cod_proc: auto.cod_proc, trat: auto.trat, qtde: auto.qtde },
+      texto: [`Código: ${auto.cod_proc || "pendente"}`, `Procedimento: ${auto.trat || "pendente"}`, `QTDE: ${auto.qtde || "1"}`].join("\n"),
+    },
+    suporte: {
+      titulo: "Procedimentos 2/3 — suporte",
+      campos: {
+        cod_proc_2: manual.cod2,
+        trat_2: manual.trat2,
+        qtde_2: manual.qtde2,
+        cod_proc_3: manual.cod3,
+        trat_3: manual.trat3,
+        qtde_3: manual.qtde3,
+      },
+      texto: [
+        `Procedimento 2: ${manual.cod2 || "código pendente"} — ${manual.trat2 || "não definido"}`,
+        `Procedimento 3: ${manual.cod3 || "código pendente"} — ${manual.trat3 || "não definido"}`,
+        "Obs.: confirme códigos de suporte com faturamento/SIGTAP antes do envio final.",
+      ].join("\n"),
+    },
+  };
+
+  const todos = Object.assign({}, ...Object.values(bloco).map(b => b.campos));
+  const tabs = [
+    ["todos", "Todos"],
+    ["endereco", "Endereço"],
+    ["anamnese", "Anamnese/exame"],
+    ["exames", "Exames"],
+    ["justificativa", "Justificativa"],
+    ["procedimento", "Procedimento"],
+    ["suporte", "Código 2/3"],
+  ];
+  const atual = abaAuto === "todos"
+    ? { titulo: "Preencher todos os blocos", campos: todos, texto: Object.values(bloco).map(b => `=== ${b.titulo} ===\n${b.texto}`).join("\n\n") }
+    : bloco[abaAuto];
+
+  const aplicar = () => {
+    onAplicar && onAplicar(atual.campos, `Preenchimento automático — ${atual.titulo}`);
+    onIrFormulario && onIrFormulario();
+  };
+
+  return (
+    <div style={sc.card({ border: `2px solid ${T}55`, background: "#F8FAFC" })}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
+        <div>
+          <H2 ch="🤖 Preenchimento automático da APAC" s={{ margin: 0, fontSize: 15 }} />
+          <p style={{ margin: "4px 0 0", color: "#64748B", fontSize: 12 }}>
+            O agente usa paciente, recepção, dossiê, evolução, prescrição e laudos já inseridos. Você pode preencher tudo ou uma caixa por vez.
+          </p>
+        </div>
+        <button onClick={() => onAplicar && onAplicar(todos, "Preenchimento automático completo")} style={{ ...sc.btn("gold", { fontSize: 11, whiteSpace: "nowrap" }) }}>
+          Preencher tudo
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        {tabs.map(([id, label]) => (
+          <button key={id} onClick={() => setAbaAuto(id)} style={{
+            ...sc.btn(abaAuto === id ? "navy" : "ghost", { fontSize: 10, padding: "6px 10px" }),
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {abaAuto === "suporte" && (
+        <div style={{ background: "#fff", border: "1px solid #CBD5E1", borderRadius: 10, padding: 10, marginBottom: 10 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+            <button onClick={() => setManual(m => ({ ...m, trat2: SUPORTE_APAC.filgrastim.nome, qtde2: "1" }))} style={sc.btn("ghost", { fontSize: 10 })}>Inserir Filgrastim</button>
+            <button onClick={() => setManual(m => ({ ...m, cod2: SUPORTE_APAC.zoledronico.codigo, trat2: SUPORTE_APAC.zoledronico.nome, qtde2: "1" }))} style={sc.btn("ghost", { fontSize: 10 })}>Inserir ácido zoledrônico no proc. 2</button>
+            <button onClick={() => setManual(m => ({ ...m, cod3: SUPORTE_APAC.zoledronico.codigo, trat3: SUPORTE_APAC.zoledronico.nome, qtde3: "1" }))} style={sc.btn("ghost", { fontSize: 10 })}>Inserir ácido zoledrônico no proc. 3</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 60px", gap: 8, marginBottom: 6 }}>
+            <input value={manual.cod2} onChange={e => setManual(m => ({ ...m, cod2: e.target.value }))} placeholder="Código 2" style={sc.inp} />
+            <input value={manual.trat2} onChange={e => setManual(m => ({ ...m, trat2: e.target.value }))} placeholder="Nome do procedimento 2" style={sc.inp} />
+            <input value={manual.qtde2} onChange={e => setManual(m => ({ ...m, qtde2: e.target.value }))} placeholder="Qtde" style={sc.inp} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 60px", gap: 8 }}>
+            <input value={manual.cod3} onChange={e => setManual(m => ({ ...m, cod3: e.target.value }))} placeholder="Código 3" style={sc.inp} />
+            <input value={manual.trat3} onChange={e => setManual(m => ({ ...m, trat3: e.target.value }))} placeholder="Nome do procedimento 3" style={sc.inp} />
+            <input value={manual.qtde3} onChange={e => setManual(m => ({ ...m, qtde3: e.target.value }))} placeholder="Qtde" style={sc.inp} />
+          </div>
+        </div>
+      )}
+
+      <div style={{ background: "#fff", border: "1px solid #CBD5E1", borderRadius: 10, padding: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 900, color: N, textTransform: "uppercase", marginBottom: 6 }}>{atual.titulo}</div>
+        <pre style={{ whiteSpace: "pre-wrap", margin: 0, color: "#334155", fontSize: 12, lineHeight: 1.65, fontFamily: "inherit" }}>{atual.texto || "Sem dados suficientes para este bloco."}</pre>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
+        <button onClick={aplicar} style={{ ...sc.btn("green", { padding: "9px 14px" }) }}>Aplicar este bloco na APAC</button>
+        <button onClick={onIrFormulario} style={{ ...sc.btn("ghost", { padding: "9px 14px" }) }}>Ir para formulário</button>
+      </div>
+    </div>
+  );
+}
+
 
 /* ══════════════════════════════════════════════════════════════════
    FORMULÁRIO APAC — Visual fiel ao modelo SUS
 ══════════════════════════════════════════════════════════════════ */
 function FormularioAPAC({ apac, onSalvar, campoEdit, setCampoEdit, onEnviar, status }) {
   const [vals, setVals] = useState(apac?.campos || {});
-  useEffect(() => { setVals(apac?.campos || {}); }, [apac?.id]);
+  useEffect(() => { setVals(apac?.campos || {}); }, [apac?.id, apac?.campos]);
 
   const preencher = (chave) => () => setCampoEdit(chave);
   const faltando = (chave) => !vals[chave];

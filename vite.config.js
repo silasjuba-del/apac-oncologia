@@ -5,19 +5,17 @@ export default defineConfig({
   plugins: [react()],
   base: '/apac-oncologia/',
   server: {
-    port: 5173,
-    open: true
+    host: '0.0.0.0',
+    port: 5177,
+    strictPort: true,
+    open: false,
   },
   build: {
     charset: 'utf8',
-    rollupOptions: {
-      output: {
-        // Força encoding UTF-8 no bundle
-      }
-    }
+    chunkSizeWarningLimit: 1200,
   },
-  // Garante que arquivos JSX são lidos como UTF-8
   esbuild: {
-    charset: 'ascii'  // escapa acentos como \uXXXX — funciona em qualquer encoding
-  }
+    // Escape acentos no bundle para evitar mojibake em ambientes Windows.
+    charset: 'ascii',
+  },
 })

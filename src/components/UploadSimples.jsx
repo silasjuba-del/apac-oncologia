@@ -11,6 +11,9 @@ const C = {
   border: "#CBD5E1",
 };
 
+const DRIVE_PASTA_URL = "https://drive.google.com/drive/folders/1s10nG9xXO_UrnIdrU8gYC6PYz4uvN9EH";
+const abrirDrive = () => window.open(DRIVE_PASTA_URL, "_blank", "noopener,noreferrer");
+
 function detectarTipo(nome) {
   const n = String(nome || "").toLowerCase();
   if (n.includes("biop")) return "biópsia";
@@ -31,6 +34,7 @@ export default function UploadSimples({ pacienteId, onAnalisar, titulo = "Laudos
   const [drag, setDrag] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
+  const [driveAberto, setDriveAberto] = useState(false);
 
   const adicionar = files => {
     const novos = Array.from(files || []).filter(f =>
@@ -50,7 +54,7 @@ export default function UploadSimples({ pacienteId, onAnalisar, titulo = "Laudos
 
   const enviar = async () => {
     if (!arquivos.length && !textoLivre.trim()) {
-      setErro("Adicione pelo menos um PDF/imagem ou cole o texto do exame.");
+      setErro("Adicione pelo menos um PDF, imagem ou texto de exame.");
       return;
     }
     setErro("");
@@ -76,17 +80,38 @@ export default function UploadSimples({ pacienteId, onAnalisar, titulo = "Laudos
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 900, color: C.navy }}>{titulo}</div>
+      <div style={{ fontSize: 14, fontWeight: 900, color: C.navy }}>{titulo}</div>
+
+      {/* Atalho Google Drive */}
+      <div
+        onClick={() => { abrirDrive(); setDriveAberto(true); }}
+        style={{
+          background: "linear-gradient(135deg,#1a73e8,#0d5db7)",
+          borderRadius: 12, padding: "11px 16px",
+          display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
+        }}
+      >
+        <div style={{ background: "rgba(255,255,255,.2)", borderRadius: 8, width: 38, height: 38, display: "grid", placeItems: "center", fontSize: 20, flexShrink: 0 }}>☁️</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ color: "#fff", fontWeight: 900, fontSize: 13 }}>📂 Abrir Pasta Drive — Laudos do Paciente</div>
+          <div style={{ color: "rgba(255,255,255,.8)", fontSize: 11, marginTop: 2 }}>Clique → pasta abre em nova aba → baixe o arquivo → arraste abaixo</div>
+        </div>
+        <div style={{ color: "rgba(255,255,255,.9)", fontSize: 20, fontWeight: 900 }}>→</div>
+      </div>
+      {driveAberto && (
+        <div style={{ background: "#EAF7EE", border: "1px solid #15803D", borderRadius: 9, padding: "8px 14px", fontSize: 12, color: "#15803D", fontWeight: 700 }}>
+          ✓ Pasta Drive aberta! Baixe os arquivos e arraste abaixo ou clique na zona de upload.
+        </div>
+      )}
 
       <div
-        onClick={() => inputRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={e => { e.preventDefault(); setDrag(false); adicionar(e.dataTransfer.files); }}
         style={{
-          border: `2px dashed ${drag ? C.teal : C.border}`,
+          border: "2px dashed " + (drag ? C.teal : C.border),
           borderRadius: 12,
-          padding: "30px 18px",
+          padding: "22px 18px",
           textAlign: "center",
           cursor: "pointer",
           background: drag ? "#E0F2F1" : C.light,
@@ -101,12 +126,11 @@ export default function UploadSimples({ pacienteId, onAnalisar, titulo = "Laudos
           style={{ display: "none" }}
           onChange={e => { adicionar(e.target.files); e.target.value = ""; }}
         />
-        <div style={{ fontSize: 34, marginBottom: 8 }}>📄</div>
-        <div style={{ fontWeight: 900, color: C.navy, fontSize: 14 }}>
-          Clique ou arraste PDF/imagem aqui
+        <div style={{ fontWeight: 900, color: C.navy, fontSize: 15 }}>
+          Arraste aqui ou <span onClick={() => inputRef.current?.click()} style={{ color: C.teal, textDecoration: "underline", cursor: "pointer" }}>clique para selecionar arquivo</span>
         </div>
-        <div style={{ fontSize: 12, color: C.gray, marginTop: 4 }}>
-          PDF, JPG, PNG, WEBP · Ctrl+clique para múltiplos arquivos
+        <div style={{ fontSize: 12, color: C.gray, marginTop: 5, fontWeight: 700 }}>
+          PDF, JPG, PNG, WEBP · Ctrl+clique para múltiplos
         </div>
       </div>
 
@@ -118,23 +142,22 @@ export default function UploadSimples({ pacienteId, onAnalisar, titulo = "Laudos
               alignItems: "center",
               gap: 9,
               background: "#FFFFFF",
-              border: `1px solid ${C.border}`,
+              border: "1px solid " + C.border,
               borderRadius: 9,
               padding: "8px 10px",
             }}>
-              <span style={{ fontSize: 17 }}>📎</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: C.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: 13, fontWeight: 900, color: C.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {file.name}
                 </div>
-                <div style={{ fontSize: 10, color: C.gray }}>{detectarTipo(file.name)}</div>
+                <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>{detectarTipo(file.name)}</div>
               </div>
               <button
                 type="button"
                 onClick={event => remover(i, event)}
-                style={{ border: "none", background: C.red, color: C.white, borderRadius: 7, padding: "3px 9px", cursor: "pointer", fontWeight: 900 }}
+                style={{ border: "none", background: C.red, color: C.white, borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontWeight: 900 }}
               >
-                ×
+                Remover
               </button>
             </div>
           ))}
@@ -145,14 +168,14 @@ export default function UploadSimples({ pacienteId, onAnalisar, titulo = "Laudos
         value={textoLivre}
         onChange={e => setTextoLivre(e.target.value)}
         rows={4}
-        placeholder="Opcional: cole aqui o texto do laudo, relatório ou resultado de exame..."
+        placeholder="Opcional: cole aqui o texto do laudo, relatório ou resultado de exame."
         style={{
           width: "100%",
           boxSizing: "border-box",
-          border: `1.5px solid ${C.border}`,
+          border: "1.5px solid " + C.border,
           borderRadius: 10,
           padding: "10px 12px",
-          fontSize: 13,
+          fontSize: 14,
           fontFamily: "Segoe UI, Arial, sans-serif",
           resize: "vertical",
           outline: "none",
@@ -173,7 +196,7 @@ export default function UploadSimples({ pacienteId, onAnalisar, titulo = "Laudos
           background: ativo && !enviando ? C.navy : C.border,
           color: ativo && !enviando ? C.white : C.gray,
           fontWeight: 900,
-          fontSize: 14,
+          fontSize: 15,
           cursor: ativo && !enviando ? "pointer" : "not-allowed",
         }}
       >

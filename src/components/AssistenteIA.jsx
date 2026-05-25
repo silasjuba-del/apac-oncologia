@@ -77,6 +77,45 @@ function _apiBase(){
   return u==="/"?"":u.replace(/\/$/,"");
 }
 
+function baseDadosExtraidos(raw=""){
+  return {
+    diagnostico:null,
+    topografia_primaria:null,
+    morfologia_subtipo:null,
+    grau_histologico:null,
+    estadiamento_tnm:null,
+    estadiamento_romano:null,
+    extensao_doenca:null,
+    subtipo_molecular:null,
+    biomarcadores:null,
+    cid10:null,
+    intencao_terapeutica:null,
+    exames_presentes:{anatomopatologico:null,imunohistoquimica:null,biomarcadores_moleculares:null,tomografia:null,ressonancia:null,pet_ct:null,cintilografia:null,ultrassom:null,mamografia:null,endoscopia:null,outros:raw?String(raw).slice(0,1800):null},
+    laboratorio:{funcao_renal:null,funcao_hepatica:null,hemograma:null,marcadores_tumorais:null},
+    dados_demograficos:{data_nascimento:null,cidade:null},
+    dados_clinicos_mencionados:{antecedentes:null,medicamentos:null,alergias:null,cirurgias:null,familiar_oncologico:null,performance_status:null,peso:null,altura:null,superficie_corporal:null},
+    sugestoes:{pendencias:"Revisar laudos originais: a extração estruturada automática não retornou JSON válido.",completar_estadiamento:null,biomarcadores_adicionais:null,protocolo_sus_sboc:null,trial_relacionado:null,inconsistencias:null,campos_criticos_apac:null}
+  };
+}
+
+function extrairJSONSeguro(texto){
+  const raw=String(texto||"").trim();
+  if(!raw)return {dados:baseDadosExtraidos(""),aviso:"Claude não retornou conteúdo no Passo 1."};
+  const tentativas=[raw.replace(/```(?:json)?/gi,"").replace(/```/g,"").trim()];
+  const fenced=raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  if(fenced)tentativas.push(fenced.trim());
+  const ini=raw.indexOf("{"), fim=raw.lastIndexOf("}");
+  if(ini>=0&&fim>ini)tentativas.push(raw.slice(ini,fim+1));
+  for(const t of tentativas){
+    try{return {dados:JSON.parse(t),aviso:""};}catch(_){}
+    try{
+      const reparado=t.replace(/,\s*([}\]])/g,"$1").replace(/[“”]/g,'"').replace(/[‘’]/g,"'");
+      return {dados:JSON.parse(reparado),aviso:""};
+    }catch(_){}
+  }
+  return {dados:baseDadosExtraidos(raw),aviso:"Não foi possível converter o Passo 1 em JSON estruturado. O dossiê foi gerado com análise narrativa e deve ser revisado nos laudos originais."};
+}
+
 // ── Componente Calculadora QT ──────────────────────────────────
 function CalculadoraQT({pac,qtParams,setQtParams,sc}){
   const N=COLORS.navy,T=COLORS.teal,G=COLORS.gold;
@@ -240,6 +279,7 @@ export default function AssistenteIA({pac,addMsg,onSalvarEvolucao}){
   const [drag,setDrag]=useState(false);
   const [texto,setTexto]=useState("");
   const [agentId,setAgentId]=useState("dossie");
+  const [selectedAgents,setSelectedAgents]=useState(()=>new Set(["dossie"]));
   const [output,setOutput]=useState("");
   const [loading,setLoading]=useState(false);
   const [msg,setMsg]=useState("");
@@ -247,8 +287,23 @@ export default function AssistenteIA({pac,addMsg,onSalvarEvolucao}){
   const [qtParams,setQtParams]=useState({peso:pac?.peso||"",altura:pac?.altura||"",creatinina:"",ecog:pac?.ecog||"0",linha:"1ª linha",intencao:"Curativa",ciclo:"1",comorbidades:""});
   const inputRef=useRef(null);
   const agent=AGENTS.find(a=>a.id===agentId)||AGENTS[0];
+  const selectedList=AGENTS.filter(a=>selectedAgents.has(a.id));
+  const selectedCount=selectedList.length||1;
+  const isMultiMode=selectedCount>1;
 
   const sc=calcSC(qtParams.peso,qtParams.altura);
+
+  const toggleAgent=id=>{
+    setAgentId(id);
+    setSelectedAgents(prev=>{
+      const next=new Set(prev);
+      if(next.has(id)&&next.size>1)next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const selectAllAgents=()=>setSelectedAgents(new Set(AGENTS.map(a=>a.id)));
+  const keepOnlyActive=()=>setSelectedAgents(new Set([agentId]));
 
   const addFiles=fl=>setFiles(prev=>{
     const novos=Array.from(fl||[]).filter(f=>/pdf|image|text|word|document/.test(f.type||"")||/\.(pdf|png|jpg|jpeg|webp|doc|docx|txt)$/i.test(f.name));
@@ -265,11 +320,11 @@ export default function AssistenteIA({pac,addMsg,onSalvarEvolucao}){
         const resJSON=await callClaude({apiKey,prompt:p1,userText:"",files,maxTokens:1800});
         let dados={};
         try{
-          const clean=resJSON.replace(/```json[\s\S]*?```|```/g,"").trim();
+          const clean=resJSON.replace(/```(?:json)?/gi,"").replace(/```/g,"").trim();
           const match=clean.match(/\{[\s\S]*\}/);
           dados=JSON.parse(match?.[0]||clean);
         }catch{
-          throw new Error("Erro ao interpretar JSON do Passo 1. Verifique os laudos e tente novamente.");
+          dados=baseDadosExtraidos(resJSON);
         }
         const faltando=validarCamposAPAC(dados);
         const aviso=faltando.length>0?`⚠ CAMPOS CRÍTICOS AUSENTES PARA APAC: ${faltando.join(" · ")}\n${"─".repeat(60)}\n\n`:"";
@@ -299,9 +354,66 @@ export default function AssistenteIA({pac,addMsg,onSalvarEvolucao}){
     finally{setLoading(false);}
   }
 
+  async function runMulti(){
+    setLoading(true);setErr("");setMsg("");setOutput("");
+
+    const executar=async(a)=>{
+      if(a.id==="dossie"){
+        setMsg("Passo 1/2 - Extraindo dados dos laudos...");
+        const p1=promptExtrairJSON(pac?.nome||"Paciente",texto||"");
+        const resJSON=await callClaude({apiKey,prompt:p1,userText:"",files,maxTokens:1800});
+        let dados={};
+        try{
+          const clean=resJSON.replace(/```(?:json)?/gi,"").replace(/```/g,"").trim();
+          const match=clean.match(/\{[\s\S]*\}/);
+          dados=JSON.parse(match?.[0]||clean);
+        }catch{
+          dados=baseDadosExtraidos(resJSON);
+        }
+        const faltando=validarCamposAPAC(dados);
+        const aviso=faltando.length>0?`CAMPOS CRITICOS AUSENTES PARA APAC: ${faltando.join(" | ")}\n${"-".repeat(60)}\n\n`:"";
+        setMsg("Passo 2/2 - Gerando prontuario oncologico...");
+        const p2=promptGerarProntuario(pac?.nome||"Paciente","upload direto",dados);
+        const resPron=await callClaude({apiKey,prompt:p2,userText:"",files:[],maxTokens:3500});
+        return aviso+resPron;
+      }
+
+      if(a.id==="protocolo"){
+        if(!pac?.diag&&!pac?.nome){throw new Error("Selecione um paciente com diagnostico preenchido antes de gerar o protocolo.");}
+        const semDose=!qtParams.peso||!qtParams.altura;
+        setMsg(semDose?"Peso e altura nao informados - protocolo sem dose real.":"Calculando doses e gerando protocolo QT...");
+        const prompt=buildPromptProtocolo(pac,qtParams,sc);
+        const obs=texto.trim()?"\n\nOBSERVACOES ADICIONAIS DO MEDICO:\n"+texto:"";
+        const res=await callClaude({apiKey,prompt:prompt+obs,userText:"",files,maxTokens:4000});
+        return (semDose?"AVISO: peso e altura nao informados. Validar doses manualmente.\n\n":"")+res;
+      }
+
+      const prompt=["Voce e assistente clinico do Dr. Silas Negrao, Hospital do Bem, Patos-PB.",buildPatientBlock(pac),a.prompt].join("\n\n");
+      return await callClaude({apiKey,prompt,userText:texto,files});
+    };
+
+    try{
+      const lista=selectedList.length?selectedList:[agent];
+      const partes=[];
+      for(let i=0;i<lista.length;i++){
+        const a=lista[i];
+        setMsg(`Executando ${i+1}/${lista.length}: ${a.label}`);
+        const res=await executar(a);
+        partes.push(lista.length>1?`${"=".repeat(72)}\n${a.label}\n${"=".repeat(72)}\n${res}`:res);
+      }
+      setOutput(partes.join("\n\n"));
+      setMsg(lista.length>1?`${lista.length} agentes executados. Revise antes de enviar ao prontuario.`:"Agente executado: "+lista[0].label);
+    }catch(e){setErr(e.message);}
+    finally{setLoading(false);}
+  }
+
   function enviar(){
     if(!output.trim())return;
-    onSalvarEvolucao&&onSalvarEvolucao(output);
+    const ok=onSalvarEvolucao?onSalvarEvolucao(output):true;
+    if(ok===false){
+      setErr("Prontuário Security bloqueou o envio. Confira se o texto pertence ao paciente ativo.");
+      return;
+    }
     addMsg&&addMsg("Assistente IA","Médico","Documento enviado ao prontuário de "+(pac?.nome||"paciente")+".","ia");
     setMsg("Enviado ao prontuário.");
   }
@@ -311,9 +423,9 @@ export default function AssistenteIA({pac,addMsg,onSalvarEvolucao}){
   return <div style={{maxWidth:960,margin:"0 auto",display:"grid",gap:12,fontFamily:"Segoe UI, Arial, sans-serif"}}>
     {/* Header */}
     <div style={{background:"linear-gradient(135deg,#1B365D,#0d2347)",borderRadius:14,padding:16,color:"#fff"}}>
-      <div style={{color:COLORS.gold,fontSize:11,fontWeight:900,textTransform:"uppercase"}}>Assistente IA por agente único</div>
+      <div style={{color:COLORS.gold,fontSize:11,fontWeight:900,textTransform:"uppercase"}}>Assistente IA multiagente</div>
       <h2 style={{margin:"4px 0 2px",fontSize:22}}>Documentos → Claude → Prontuário</h2>
-      <div style={{fontSize:12,opacity:.72}}>{pac?.nome||"Nenhum paciente selecionado"} · o resultado substitui o anterior para evitar mistura de agentes.</div>
+      <div style={{fontSize:12,opacity:.72}}>{pac?.nome||"Nenhum paciente selecionado"} · selecione um ou vários agentes e revise tudo antes de enviar ao prontuário.</div>
     </div>
 
     {/* Chave opcional */}
@@ -328,13 +440,25 @@ export default function AssistenteIA({pac,addMsg,onSalvarEvolucao}){
 
     {/* Seleção de agente */}
     <div style={{background:"#fff",border:"1px solid #CBD5E1",borderRadius:14,padding:14}}>
-      <div style={{fontSize:12,fontWeight:900,color:COLORS.navy,marginBottom:8}}>1. Selecione o agente</div>
+      <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+        <div style={{fontSize:12,fontWeight:900,color:COLORS.navy}}>1. Selecione um ou mais agentes</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <button type="button" onClick={selectAllAgents} style={{border:"1px solid "+COLORS.gold,background:"#FFFBEB",color:COLORS.navy,borderRadius:8,padding:"6px 9px",fontWeight:900,cursor:"pointer",fontSize:11}}>Selecionar todos</button>
+          <button type="button" onClick={keepOnlyActive} style={{border:"1px solid "+COLORS.border,background:"#fff",color:COLORS.navy,borderRadius:8,padding:"6px 9px",fontWeight:900,cursor:"pointer",fontSize:11}}>Manter só ativo</button>
+        </div>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
         {AGENTS.map(a=>{
           const isProto=a.id==="protocolo";
+          const selecionado=selectedAgents.has(a.id);
           const ativo=agentId===a.id;
-          return <button key={a.id} onClick={()=>{setAgentId(a.id);setOutput("");}} style={{border:"1px solid "+(ativo?(isProto?"#0F9D58":COLORS.gold):(isProto?"#0F9D5844":COLORS.border)),background:ativo?(isProto?"#0F9D58":COLORS.gold):(isProto?"#F0FFF4":"#fff"),color:ativo?"#fff":(isProto?"#0F9D58":COLORS.navy),borderRadius:10,padding:"10px 8px",fontWeight:900,cursor:"pointer",fontSize:12}}>{a.label}</button>;
+          return <button key={a.id} type="button" onClick={()=>toggleAgent(a.id)} style={{border:"1px solid "+(selecionado?(isProto?"#0F9D58":COLORS.gold):(isProto?"#0F9D5844":COLORS.border)),background:selecionado?(isProto?"#0F9D58":COLORS.gold):(isProto?"#F0FFF4":"#fff"),color:selecionado?"#fff":(isProto?"#0F9D58":COLORS.navy),borderRadius:10,padding:"10px 8px",fontWeight:900,cursor:"pointer",fontSize:12,boxShadow:ativo?"0 0 0 3px rgba(27,54,93,.12)":"none",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            <span>{selecionado?"☑":"☐"}</span><span>{a.label}</span>
+          </button>;
         })}
+      </div>
+      <div style={{marginTop:8,fontSize:11,color:COLORS.gray,fontWeight:700}}>
+        {selectedCount} agente(s) selecionado(s). Clique em um cartão para ativar/configurar ou remover da execução.
       </div>
       {agentId==="protocolo"&&<div style={{marginTop:10,background:"#E8F5E9",border:"1px solid #0F9D5833",borderRadius:8,padding:"7px 10px",fontSize:11,color:"#1B5E20",fontWeight:700}}>
         💉 O Claude vai sugerir o protocolo mais adequado para o diagnóstico, calcular as doses reais pela SC e gerar cronograma completo com pré-medicações e toxicidades.
@@ -365,8 +489,8 @@ export default function AssistenteIA({pac,addMsg,onSalvarEvolucao}){
           ? "Ex: paciente com neuropatia prévia, prefere regime semanal, usa cateter totalmente implantado..."
           : "Cole laudo, observação, link do Drive ou texto clínico..."}
         style={{width:"100%",boxSizing:"border-box",border:"1px solid #CBD5E1",borderRadius:10,padding:12,fontSize:14,fontFamily:"Segoe UI, Arial, sans-serif",resize:"vertical"}}/>
-      <button style={{...btn(agentId==="protocolo"?"#0F9D58":COLORS.navy,loading),width:"100%",marginTop:10,padding:12,fontSize:15}} disabled={loading} onClick={run}>
-        {loading?(agentId==="protocolo"?"Calculando doses e gerando protocolo...":"Processando..."):(agentId==="protocolo"?"💉 Gerar Protocolo QT + Calculadora de Dose":"Executar agente: "+agent.label)}
+      <button style={{...btn(agentId==="protocolo"?"#0F9D58":COLORS.navy,loading),width:"100%",marginTop:10,padding:12,fontSize:15}} disabled={loading} onClick={runMulti}>
+        {loading?(isMultiMode?`Executando ${selectedCount} agentes...`:(agentId==="protocolo"?"Calculando doses e gerando protocolo...":"Processando...")):(isMultiMode?`Executar ${selectedCount} agentes selecionados`:(agentId==="protocolo"?"💉 Gerar Protocolo QT + Calculadora de Dose":"Executar agente: "+agent.label))}
       </button>
     </div>
 
@@ -378,12 +502,13 @@ export default function AssistenteIA({pac,addMsg,onSalvarEvolucao}){
     <div style={{background:"#fff",border:"1px solid #CBD5E1",borderRadius:14,padding:14}}>
       <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginBottom:8}}>
         <strong style={{color:COLORS.navy}}>
-          {agentId==="protocolo"?"📋 Protocolo gerado — valide antes de prescrever":"Resultado editável"}
+          {isMultiMode?"Resultado multiagente — revise antes de enviar":(agentId==="protocolo"?"📋 Protocolo gerado — valide antes de prescrever":"Resultado editável")}
         </strong>
         {agentId==="protocolo"&&output&&<span style={{fontSize:10,background:"#FFEBEE",color:COLORS.red,borderRadius:6,padding:"3px 8px",fontWeight:900}}>⚠ VALIDAÇÃO MÉDICA OBRIGATÓRIA</span>}
       </div>
-      <textarea value={output} onChange={e=>setOutput(e.target.value)} rows={agentId==="protocolo"?22:16}
-        placeholder={agentId==="protocolo"?"O protocolo sugerido aparecerá aqui com doses calculadas...":"O resultado do agente selecionado aparecerá aqui."}
+      {output&&<div style={{background:"#EFF6FF",border:"1px solid #2B7A8C44",borderRadius:9,padding:"7px 10px",fontSize:11,color:COLORS.navy,fontWeight:800,marginBottom:8}}>Prontuario Security ativo: antes de enviar, confere nome, CPF, CNS e nascimento do paciente.</div>}
+      <textarea value={output} onChange={e=>setOutput(e.target.value)} rows={isMultiMode?24:(agentId==="protocolo"?22:16)}
+        placeholder={isMultiMode?"Os resultados dos agentes selecionados aparecerão aqui em blocos separados.":(agentId==="protocolo"?"O protocolo sugerido aparecerá aqui com doses calculadas...":"O resultado do agente selecionado aparecerá aqui.")}
         style={{width:"100%",boxSizing:"border-box",border:"1px solid #CBD5E1",borderRadius:10,padding:14,fontSize:agentId==="protocolo"?13:15,lineHeight:1.7,fontFamily:agentId==="protocolo"?"Consolas, Courier New, monospace":"Segoe UI, Arial, sans-serif",fontWeight:600,resize:"vertical",color:COLORS.navy,background:"#FFFEFB"}}/>
       <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
         <button style={{...btn(COLORS.green,!output.trim()),flex:1}} disabled={!output.trim()} onClick={enviar}>Enviar ao prontuário</button>

@@ -33,11 +33,39 @@ const upload = multer({
 // ─────────────────────────────────────────────────────────────
 router.post("/gerar", upload.array("laudos", 20), async (req, res) => {
   const pacienteId = Number(req.body.paciente_id);
-  if (!pacienteId) return res.status(400).json({ message: "paciente_id obrigatório." });
+  const pacienteJson = parseJsonSeguro(req.body.paciente_json, {});
+  const recepcaoJson = parseJsonSeguro(req.body.recepcao_json, {});
+  if (!process.env.ANTHROPIC_API_KEY) {
+    limparUploadsTemporarios(req.files);
+    return res.status(503).json({
+      ok:false,
+      code:"ANTHROPIC_API_KEY_MISSING",
+      message:"Claude não configurado no backend. Preencha ANTHROPIC_API_KEY no server/.env e reinicie o servidor.",
+    });
+  }
 
   try {
-    const dados = getPacienteCompleto(pacienteId);
-    if (!dados) return res.status(404).json({ message: "Paciente não encontrado." });
+    const dados = pacienteId
+      ? getPacienteCompleto(pacienteId)
+      : { paciente: pacienteJson, recepcao: recepcaoJson };
+    if (pacienteId && !dados) return res.status(404).json({ message: "Paciente não encontrado." });
+
+    if (!pacienteId) {
+      const textosLaudos = await montarTextosLaudos(req);
+      const resumo = await gerarDossie({
+        paciente: dados.paciente || {},
+        recepcao: dados.recepcao || {},
+        textosLaudos,
+      });
+      return res.json({
+        ok: true,
+        dossieId: null,
+        status: "concluido",
+        text: resumo,
+        resumo,
+        arquivosLidos: (req.files || []).length,
+      });
+    }
 
     // Criar dossiê com status processando
     const info = db.prepare(`
@@ -51,48 +79,7 @@ router.post("/gerar", upload.array("laudos", 20), async (req, res) => {
     // Background — analisar laudos + gerar dossiê
     ;(async () => {
       try {
-        const textosLaudos = [];
-
-        // 1. Texto colado manualmente
-        const textoLivre = req.body.texto_livre?.trim();
-        if (textoLivre) {
-          textosLaudos.push({
-            tipo:     "laudo (texto colado)",
-            data:     new Date().toISOString().substring(0, 10),
-            conteudo: textoLivre,
-          });
-        }
-
-        // 2. Arquivos enviados
-        const arquivos = req.files || [];
-        const tipos    = [].concat(req.body.tipos  || []);
-        const datas    = [].concat(req.body.datas  || []);
-
-        for (let i = 0; i < arquivos.length; i++) {
-          const arq  = arquivos[i];
-          const tipo = tipos[i] || detectarTipo(arq.originalname);
-          const data = datas[i] || "";
-
-          try {
-            const b64  = fs.readFileSync(arq.path).toString("base64");
-            const resumo = await resumirLaudo({
-              tipo,
-              data,
-              mimeType:   arq.mimetype,
-              base64Data: b64,
-            });
-            textosLaudos.push({ tipo, data, conteudo: resumo });
-          } catch (ef) {
-            console.warn("[laudo]", arq.originalname, ef.message);
-            textosLaudos.push({
-              tipo, data,
-              conteudo: `Não foi possível analisar este arquivo automaticamente: ${arq.originalname}`,
-            });
-          } finally {
-            // Remover arquivo temporário
-            if (fs.existsSync(arq.path)) fs.unlinkSync(arq.path);
-          }
-        }
+        const textosLaudos = await montarTextosLaudos(req);
 
         // 3. Gerar dossiê consolidado
         const resumo = await gerarDossie({
@@ -126,7 +113,7 @@ router.post("/gerar", upload.array("laudos", 20), async (req, res) => {
           "UPDATE dossies SET status_analise='erro', erro_analise=? WHERE id=?"
         ).run("Falha na análise. Verifique sua chave API e tente novamente.", dossieId);
         // Limpar arquivos temporários em caso de erro
-        (req.files || []).forEach(f => { try { fs.unlinkSync(f.path); } catch {} });
+        limparUploadsTemporarios(req.files);
       }
     })();
 
@@ -263,6 +250,66 @@ router.post("/ler-local", async (req, res) => {
     res.status(500).json({ ok: false, message: e.message || "Erro interno." });
   }
 });
+
+function limparUploadsTemporarios(files = []) {
+  for (const f of files || []) {
+    try {
+      if (f?.path && fs.existsSync(f.path)) fs.unlinkSync(f.path);
+    } catch {}
+  }
+}
+
+function parseJsonSeguro(raw, fallback = {}) {
+  if (!raw) return fallback;
+  if (typeof raw === "object") return raw;
+  try { return JSON.parse(String(raw)); }
+  catch { return fallback; }
+}
+
+async function montarTextosLaudos(req) {
+  const textosLaudos = [];
+
+  const textoLivre = req.body.texto_livre?.trim();
+  if (textoLivre) {
+    textosLaudos.push({
+      tipo: "laudo (texto colado)",
+      data: new Date().toISOString().substring(0, 10),
+      conteudo: textoLivre,
+    });
+  }
+
+  const arquivos = req.files || [];
+  const tipos = [].concat(req.body.tipos || []);
+  const datas = [].concat(req.body.datas || []);
+
+  for (let i = 0; i < arquivos.length; i++) {
+    const arq = arquivos[i];
+    const tipo = tipos[i] || detectarTipo(arq.originalname);
+    const data = datas[i] || "";
+
+    try {
+      const b64 = fs.readFileSync(arq.path).toString("base64");
+      const resumo = await resumirLaudo({
+        tipo,
+        data,
+        mimeType: arq.mimetype,
+        base64Data: b64,
+      });
+      textosLaudos.push({ tipo, data, conteudo: resumo });
+    } catch (ef) {
+      console.warn("[laudo]", arq.originalname, ef.message);
+      textosLaudos.push({
+        tipo,
+        data,
+        conteudo: `Não foi possível analisar este arquivo automaticamente: ${arq.originalname}`,
+      });
+    } finally {
+      if (fs.existsSync(arq.path)) fs.unlinkSync(arq.path);
+    }
+  }
+
+  return textosLaudos;
+}
 
 function detectarTipo(nomeArquivo) {
   const n = nomeArquivo.toLowerCase();

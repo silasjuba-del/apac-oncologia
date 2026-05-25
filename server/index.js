@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 import db, { getPacienteCompleto, buscarPacientes, validarAPAC } from "./db.js";
 import { responderClaude, preencherAPAC, gerarDossie, gerarDossieComArquivos }  from "./services/claudeService.js";
 import dossieRouter       from "./routes/dossie.js";
+import oncoAgentRouter    from "./routes/oncoagent.js";
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,16 +23,102 @@ app.use(cors());
 app.use(express.json({ limit:"60mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-// Em produção: serve o frontend buildado pelo Vite
-if (process.env.NODE_ENV === "production") {
-  const distDir = path.join(__dirname, "../dist");
+// ── Rotas OncoAgent ───────────────────────────────────────────
+app.use("/api/oncoagent", oncoAgentRouter);
+
+// Serve o frontend buildado pelo Vite (sempre, sem depender de NODE_ENV)
+const distDir = path.join(__dirname, "../dist");
+if (fs.existsSync(distDir)) {
   app.use("/apac-oncologia", express.static(distDir));
-  app.get("/apac-oncologia/*", (_req, res) => {
-    res.sendFile(path.join(distDir, "index.html"));
-  });
+  app.get("/apac-oncologia", (_req, res) => res.sendFile(path.join(distDir, "index.html")));
+  app.get("/apac-oncologia/*", (_req, res) => res.sendFile(path.join(distDir, "index.html")));
   app.get("/", (_req, res) => res.redirect("/apac-oncologia/"));
 }
 fs.mkdirSync(path.join(__dirname, "../uploads"), { recursive: true });
+
+function secNorm(v) {
+  return String(v || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+function secDigits(v) { return String(v || "").replace(/\D/g, ""); }
+function secDateKey(v) {
+  const s = String(v || "").trim();
+  const iso = s.match(/\b(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})\b/);
+  if (iso) return String(iso[3]).padStart(2, "0") + String(iso[2]).padStart(2, "0") + iso[1];
+  const br = s.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})\b/);
+  if (br) return String(br[1]).padStart(2, "0") + String(br[2]).padStart(2, "0") + (br[3].length === 2 ? "20" + br[3] : br[3]);
+  const d = secDigits(s);
+  if (d.length === 8 && Number(d.slice(0, 4)) > 1900) return d.slice(6, 8) + d.slice(4, 6) + d.slice(0, 4);
+  return d;
+}
+function secNameParts(nome) {
+  return secNorm(nome).split(" ").filter(p => p.length >= 3 && !["das", "dos", "del", "de", "da", "do", "e"].includes(p));
+}
+function secNamesCompatible(a, b) {
+  const na = secNorm(a), nb = secNorm(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const ta = secNameParts(a), tb = secNameParts(b);
+  if (!ta.length || !tb.length) return false;
+  if (ta.length === 1 || tb.length === 1) return ta[0] === tb[0];
+  return ta[0] === tb[0] && ta[ta.length - 1] === tb[tb.length - 1];
+}
+function secTextHasName(nome, texto) {
+  const t = " " + secNorm(texto) + " ";
+  const n = secNorm(nome);
+  if (!n || !t.trim()) return false;
+  if (t.includes(" " + n + " ")) return true;
+  const partes = secNameParts(nome);
+  if (partes.length >= 2) return t.includes(" " + partes[0] + " ") && t.includes(" " + partes[partes.length - 1] + " ");
+  return partes[0]?.length >= 5 && t.includes(" " + partes[0] + " ");
+}
+function secExtractNamedPatient(texto) {
+  const linhas = String(texto || "").split(/\n/).slice(0, 28);
+  for (const linha of linhas) {
+    const m = String(linha).match(/\b(?:nome\s+completo|nome|paciente|identifica[cç][aã]o)\s*[:\-]\s*(.+)$/i);
+    if (!m) continue;
+    const nome = String(m[1] || "")
+      .replace(/\s+(nasc(?:imento)?|data\s+de\s+nascimento|cpf|cns|cart[aã]o|idade|diagn[oó]stico|diag|cid)\b.*$/i, "")
+      .replace(/[|;].*$/, "")
+      .replace(/^[•*\-\s]+|[.,\s]+$/g, "")
+      .trim();
+    if (secNameParts(nome).length) return nome;
+  }
+  return "";
+}
+function prontuarioSecurityServer(paciente, texto) {
+  const problemas = [];
+  const t = String(texto || "");
+  if (!secNorm(paciente?.nome)) problemas.push("paciente sem nome cadastrado.");
+  if (!t.trim()) problemas.push("texto de evolução vazio.");
+  const nomeIdentificado = secExtractNamedPatient(t);
+  if (nomeIdentificado && !secNamesCompatible(nomeIdentificado, paciente.nome)) {
+    problemas.push(`nome no texto (${nomeIdentificado}) não confere com o paciente (${paciente.nome}).`);
+  }
+  const outros = db.prepare("SELECT nome FROM pacientes WHERE id<>? AND nome IS NOT NULL AND trim(nome)<>'' LIMIT 500").all(paciente.id || 0);
+  const outro = outros.find(p => !secNamesCompatible(p.nome, paciente.nome) && secTextHasName(p.nome, t));
+  if (outro) problemas.push(`texto menciona outro paciente cadastrado: ${outro.nome}.`);
+  const cpfAtual = secDigits(paciente?.cpf);
+  const cpfs = [...t.matchAll(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g)].map(m => secDigits(m[0]));
+  if (cpfAtual && cpfs.some(c => c !== cpfAtual)) problemas.push("CPF citado no texto não confere com o paciente.");
+  if (!cpfAtual && cpfs.length) problemas.push("texto contém CPF, mas o paciente não tem CPF cadastrado para conferência.");
+  const cnsAtual = secDigits(paciente?.cns);
+  const cnss = [...t.matchAll(/\b\d{15}\b/g)].map(m => secDigits(m[0]));
+  if (cnsAtual && cnss.some(c => c !== cnsAtual)) problemas.push("CNS citado no texto não confere com o paciente.");
+  if (!cnsAtual && cnss.length) problemas.push("texto contém CNS, mas o paciente não tem CNS cadastrado para conferência.");
+  const nascAtual = secDateKey(paciente?.data_nascimento);
+  const nascs = [];
+  const reNasc = /\b(?:nasc(?:imento)?|data\s+de\s+nascimento|dn)\.?\s*[:\-]?\s*(\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4})/gi;
+  let m;
+  while ((m = reNasc.exec(t))) nascs.push(secDateKey(m[1]));
+  if (nascAtual && nascs.some(d => d && d !== nascAtual)) problemas.push("data de nascimento citada no texto não confere com o paciente.");
+  if (!nascAtual && nascs.length) problemas.push("texto contém nascimento, mas o paciente não tem nascimento cadastrado para conferência.");
+  return { ok: problemas.length === 0, problemas, agente: "Prontuário Security" };
+}
 
 // ── Rotas dossiê (upload direto + Claude) ─────────────────────
 app.use("/api/dossie", dossieRouter);
@@ -273,10 +360,197 @@ app.post("/api/dossie/drive", async (req, res) => {
 });
 
 
+const FLUXO_ATENDIMENTO = [
+  {
+    id: "pre_consulta",
+    ordem: 1,
+    area: "Paciente",
+    titulo: "Pre-consulta iniciada",
+    objetivo: "Paciente preenche dados demograficos, sintomas e historico de saude.",
+    entrada: ["formulario_paciente"],
+    saida: "aguardando_recepcao",
+    automacoes: ["criar_dossie_provisorio", "avisar_recepcao"],
+  },
+  {
+    id: "aguardando_recepcao",
+    ordem: 2,
+    area: "Recepcao",
+    titulo: "Aguardando recepcao",
+    objetivo: "Recepcao encontra o paciente por nome, CPF, CNS, nascimento ou mae.",
+    entrada: ["busca_paciente", "checkin"],
+    saida: "recepcao_conferencia",
+    automacoes: ["abrir_dossie", "limpar_paciente_anterior"],
+  },
+  {
+    id: "recepcao_conferencia",
+    ordem: 3,
+    area: "Recepcao",
+    titulo: "Recepcao em conferencia",
+    objetivo: "Confirmar somente dados administrativos e anexar documentos.",
+    entrada: ["confirmacao_demografica", "upload_recepcao", "drive"],
+    saida: "documentos_anexados",
+    automacoes: ["vincular_documentos_ao_dossie"],
+  },
+  {
+    id: "documentos_anexados",
+    ordem: 4,
+    area: "IA",
+    titulo: "Documentos anexados",
+    objetivo: "Enviar laudos, PDF, imagens ou texto para organizacao pela IA.",
+    entrada: ["pdf", "imagem", "texto_colado", "drive"],
+    saida: "claude_processando",
+    automacoes: ["iniciar_analise_claude"],
+  },
+  {
+    id: "claude_processando",
+    ordem: 5,
+    area: "IA",
+    titulo: "Claude processando",
+    objetivo: "Extrair resumo oncologico, pendencias e dados estruturados sem definir conduta.",
+    entrada: ["dossie", "documentos"],
+    saida: "pronto_medico",
+    automacoes: ["gerar_resumo_oncologico", "preencher_rascunho_evolucao"],
+  },
+  {
+    id: "pronto_medico",
+    ordem: 6,
+    area: "Medico",
+    titulo: "Pronto para medico",
+    objetivo: "Medico abre atendimento em pagina unica, limpa e editavel.",
+    entrada: ["lista_atendimento", "resumo_claude"],
+    saida: "em_consulta",
+    automacoes: ["abrir_prontuario_unico"],
+  },
+  {
+    id: "em_consulta",
+    ordem: 7,
+    area: "Medico",
+    titulo: "Em consulta",
+    objetivo: "Medico valida e edita a evolucao unica.",
+    entrada: ["evolucao_editavel"],
+    saida: "evolucao_salva",
+    automacoes: ["salvar_evolucao", "registrar_timeline"],
+  },
+  {
+    id: "evolucao_salva",
+    ordem: 8,
+    area: "Documentos",
+    titulo: "Evolucao salva",
+    objetivo: "Selecionar documentos a gerar: receitas, exames, orientacoes, termo e APAC.",
+    entrada: ["evolucao_validada"],
+    saida: "apac_validacao",
+    automacoes: ["gerar_documentos_selecionados"],
+  },
+  {
+    id: "apac_validacao",
+    ordem: 9,
+    area: "Faturamento/APAC",
+    titulo: "APAC em validacao",
+    objetivo: "Validar checklist anti-glosa antes de imprimir.",
+    entrada: ["dados_apac", "laudos", "evolucao"],
+    saida: "apac_pronta",
+    automacoes: ["validar_antiglosa", "bloquear_se_critico"],
+  },
+  {
+    id: "apac_pronta",
+    ordem: 10,
+    area: "Faturamento/APAC",
+    titulo: "APAC pronta",
+    objetivo: "Imprimir ou exportar APAC revisada.",
+    entrada: ["apac_validada"],
+    saida: null,
+    automacoes: ["imprimir_apac", "registrar_status_final"],
+  },
+  {
+    id: "pendencia_administrativa",
+    ordem: 99,
+    area: "Equipe",
+    titulo: "Pendencia administrativa",
+    objetivo: "Aguardar correcao de documento, cadastro ou autorizacao.",
+    entrada: ["pendencia"],
+    saida: "recepcao_conferencia",
+    automacoes: ["avisar_setor_responsavel"],
+  },
+];
+
+const EVENTOS_FLUXO = {
+  paciente_enviou_preconsulta: { de: ["pre_consulta"], para: "aguardando_recepcao" },
+  recepcao_iniciou_conferencia: { de: ["aguardando_recepcao"], para: "recepcao_conferencia" },
+  recepcao_anexou_documentos: { de: ["recepcao_conferencia"], para: "documentos_anexados" },
+  ia_iniciada: { de: ["documentos_anexados"], para: "claude_processando" },
+  ia_concluida: { de: ["claude_processando"], para: "pronto_medico" },
+  medico_abriu_atendimento: { de: ["pronto_medico"], para: "em_consulta" },
+  medico_salvou_evolucao: { de: ["em_consulta"], para: "evolucao_salva" },
+  medico_solicitou_apac: { de: ["evolucao_salva"], para: "apac_validacao" },
+  apac_validada: { de: ["apac_validacao"], para: "apac_pronta" },
+  pendencia_identificada: { de: FLUXO_ATENDIMENTO.map(x => x.id), para: "pendencia_administrativa" },
+  pendencia_corrigida: { de: ["pendencia_administrativa"], para: "recepcao_conferencia" },
+};
+
+function etapaFluxo(status) {
+  return FLUXO_ATENDIMENTO.find(x => x.id === status) || FLUXO_ATENDIMENTO[0];
+}
+
+function proximaEtapaFluxo(status) {
+  const atual = etapaFluxo(status);
+  return atual.saida ? etapaFluxo(atual.saida) : null;
+}
+
+function transicaoFluxo(status, evento) {
+  const atual = etapaFluxo(status).id;
+  const regra = EVENTOS_FLUXO[evento];
+  if (!regra) {
+    return { ok:false, statusAtual:atual, message:"Evento de fluxo nao reconhecido." };
+  }
+  if (!regra.de.includes(atual)) {
+    return {
+      ok:false,
+      statusAtual:atual,
+      evento,
+      message:"Evento nao permitido para o status atual.",
+      permitidoEm:regra.de,
+      proximaSugerida:proximaEtapaFluxo(atual),
+    };
+  }
+  return {
+    ok:true,
+    statusAnterior:atual,
+    evento,
+    statusNovo:regra.para,
+    etapaAtual:etapaFluxo(regra.para),
+    proximaSugerida:proximaEtapaFluxo(regra.para),
+  };
+}
+
+app.get("/api/fluxo/rotas", (_req, res) => {
+  res.json({
+    ok:true,
+    nome:"Dossie Oncologico Inteligente",
+    versao:"mvp-1",
+    rotas:FLUXO_ATENDIMENTO,
+    eventos:Object.keys(EVENTOS_FLUXO),
+  });
+});
+
+app.get("/api/fluxo/status/:status", (req, res) => {
+  const etapa = etapaFluxo(req.params.status);
+  res.json({ ok:true, etapa, proxima:proximaEtapaFluxo(etapa.id) });
+});
+
+app.post("/api/fluxo/proximo-passo", (req, res) => {
+  const { status="pre_consulta", evento="" } = req.body || {};
+  const resultado = evento
+    ? transicaoFluxo(status, evento)
+    : { ok:true, statusAtual:etapaFluxo(status).id, etapaAtual:etapaFluxo(status), proximaSugerida:proximaEtapaFluxo(status) };
+  res.status(resultado.ok ? 200 : 400).json(resultado);
+});
+
+
 app.get("/api/health", (_req, res) => res.json({
   ok: true,
   service: "onco-app-backend-v4",
   claude: !!process.env.ANTHROPIC_API_KEY,
+  fluxo: true,
 }));
 
 // ─────────────────────────────────────────────────────────────
@@ -407,6 +681,17 @@ app.post("/api/medico/evolucao/salvar", (req, res) => {
   try {
     const { paciente_id, dossie_id, texto_evolucao } = req.body;
     if (!paciente_id) return res.status(400).json({ message:"paciente_id obrigatório." });
+    const paciente = db.prepare("SELECT id,nome,cpf,cns,data_nascimento FROM pacientes WHERE id=?").get(paciente_id);
+    if (!paciente) return res.status(404).json({ message:"Paciente não encontrado." });
+    const security = prontuarioSecurityServer(paciente, texto_evolucao || "");
+    if (!security.ok) {
+      return res.status(409).json({
+        ok:false,
+        agent:"Prontuário Security",
+        message:"Prontuário Security bloqueou o salvamento: dados demográficos não conferem.",
+        problemas:security.problemas
+      });
+    }
     const exist = db.prepare(
       "SELECT id FROM evolucoes WHERE paciente_id=? AND status='rascunho' LIMIT 1"
     ).get(paciente_id);
