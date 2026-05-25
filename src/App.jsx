@@ -229,13 +229,20 @@ export default function App(){
     }
     setPac(x=>{const novo={...x,[k]:v};savePacAtual(novo);dbSalvarPaciente(novo);return novo;});
   };
-  // P1+F0 — setDossie guardado: bloqueia escrita sem paciente ativo E sem encounter aberto
+  // P1+F0 — setDossie guardado: BLOQUEANTE (F2) — requer paciente ativo E encounter aberto
   const setDossieGuardado=(fn)=>{
-    if(!requireActivePatient(pac)){console.warn("[P1] setDossie bloqueado — sem paciente ativo");return;}
+    if(!requireActivePatient(pac)){
+      console.warn("[P1] setDossie bloqueado — sem paciente ativo");
+      return;
+    }
     const encCheck = requireEncounter(pac);
-    if(!encCheck.ok){console.warn("[F0] setDossieGuardado bloqueado — sem atendimento aberto:",encCheck.reason);}
-    // Aviso não bloqueante nesta fase (F1): registra e continua para não quebrar fluxo legado.
-    // F2 tornará este guard bloqueante após migração completa dos componentes.
+    if(!encCheck.ok){
+      // F2: BLOQUEANTE — dados clínicos não são gravados sem encounter.
+      // Exceção: criarDossieInicial (UI reset) passa direto via setDossieOncologico.
+      // Se isto está bloqueando em situação válida, verifique se abrirAtendimento foi chamado.
+      console.warn("[F0] setDossieGuardado BLOQUEADO — sem atendimento aberto:", encCheck.reason);
+      return;
+    }
     setDossieOncologico(fn);
   };
   // Auto-preenche campos clínicos sempre que anatom/imagen forem alterados (alimenta APAC + evolução)

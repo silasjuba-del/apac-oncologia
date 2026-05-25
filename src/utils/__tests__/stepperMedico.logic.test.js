@@ -1,8 +1,9 @@
-// stepperMedico.logic.test.js — Lógica de negócio do StepperMedico (sem DOM)
+// stepperMedico.logic.test.js — Lógica de negócio do StepperMedico (F0/F2)
 // Testa os contratos puros que o componente StepperMedico usa:
 //   - requireActivePatient (guard do Próximo no step 0)
 //   - resolverAPACCompleta (score anti-glosa exibido na StepBar)
-//   - ETAPAS estrutura esperada
+//   - ETAPAS estrutura por tipo (F2 — stepperConfig)
+//   - podeAvancar (guard de navegação F2)
 //
 // Testes de renderização JSX (navegação de botões, snapshots) requerem
 // jsdom + @testing-library/react — ficam documentados aqui para fase posterior.
@@ -22,6 +23,10 @@ vi.mock('../../components/ui/primitives', () => ({
 import { requireActivePatient } from '../security';
 import { resolverAPACCompleta, CAMPOS_APAC } from '../apacDeterministico';
 import { PAC_MAMA, PAC_VAZIO, PAC_SEM_ID, pacAtivo, dossieMinimo } from '../../dev/fixtures';
+import {
+  getEtapas, getMaxStep, temEtapa, indexEtapa, podeAvancar, TIPO_DEFAULT,
+  ENCOUNTER_TIPOS, ENCOUNTER_TIPO_LABELS,
+} from '../stepperConfig';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Guard de navegação — "Próximo" desabilitado no step 0 sem paciente ativo
@@ -186,6 +191,133 @@ describe('StepperMedico — integração com fixtures', () => {
     const d = dossieMinimo(PAC_MAMA);
     const r = resolverAPACCompleta(d.paciente, d);
     expect(r.pendencias).toHaveLength(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. F2 — stepperConfig: ETAPAS_POR_TIPO e contratos de cada tipo
+// ─────────────────────────────────────────────────────────────────────────────
+describe('stepperConfig — ETAPAS_POR_TIPO (F2)', () => {
+
+  it('default é RETORNO_QT', () => {
+    expect(TIPO_DEFAULT).toBe(ENCOUNTER_TIPOS.RETORNO_QT);
+  });
+
+  it('RETORNO_QT tem 6 etapas: tipo → paciente → evolucao → validar → apac → concluir', () => {
+    const etapas = getEtapas(ENCOUNTER_TIPOS.RETORNO_QT);
+    expect(etapas).toHaveLength(6);
+    expect(etapas[0].id).toBe('tipo');
+    expect(etapas[5].id).toBe('concluir');
+  });
+
+  it('RETORNO_QT inclui etapa validar (score APAC)', () => {
+    expect(temEtapa(ENCOUNTER_TIPOS.RETORNO_QT, 'validar')).toBe(true);
+  });
+
+  it('PRIMEIRA_CONSULTA tem 5 etapas: tipo → paciente → evolucao → apac → concluir', () => {
+    const etapas = getEtapas(ENCOUNTER_TIPOS.PRIMEIRA_CONSULTA);
+    expect(etapas).toHaveLength(5);
+    expect(etapas[0].id).toBe('tipo');
+    expect(etapas[4].id).toBe('concluir');
+  });
+
+  it('PRIMEIRA_CONSULTA NÃO inclui etapa validar', () => {
+    expect(temEtapa(ENCOUNTER_TIPOS.PRIMEIRA_CONSULTA, 'validar')).toBe(false);
+  });
+
+  it('RETORNO_CLINICO tem 4 etapas: sem validar e sem apac QT', () => {
+    const etapas = getEtapas(ENCOUNTER_TIPOS.RETORNO_CLINICO);
+    expect(etapas).toHaveLength(4);
+    expect(temEtapa(ENCOUNTER_TIPOS.RETORNO_CLINICO, 'validar')).toBe(false);
+  });
+
+  it('INTERCORRENCIA tem 4 etapas: tipo → paciente → conduta → concluir', () => {
+    const etapas = getEtapas(ENCOUNTER_TIPOS.INTERCORRENCIA);
+    expect(etapas).toHaveLength(4);
+    expect(etapas[2].id).toBe('conduta');
+    expect(temEtapa(ENCOUNTER_TIPOS.INTERCORRENCIA, 'apac')).toBe(false);
+  });
+
+  it('tipo inválido retorna etapas do RETORNO_QT (default)', () => {
+    const etapas = getEtapas('tipo_invalido');
+    expect(etapas).toHaveLength(6);
+    expect(etapas[0].id).toBe('tipo');
+  });
+
+  it('toda sequência começa com tipo e termina com concluir', () => {
+    Object.values(ENCOUNTER_TIPOS).forEach(t => {
+      const etapas = getEtapas(t);
+      expect(etapas[0].id).toBe('tipo');
+      expect(etapas[etapas.length - 1].id).toBe('concluir');
+    });
+  });
+
+  it('getMaxStep RETORNO_QT = 5', () => {
+    expect(getMaxStep(ENCOUNTER_TIPOS.RETORNO_QT)).toBe(5);
+  });
+
+  it('indexEtapa localiza validar no RETORNO_QT (step 3)', () => {
+    expect(indexEtapa(ENCOUNTER_TIPOS.RETORNO_QT, 'validar')).toBe(3);
+  });
+
+  it('indexEtapa retorna -1 para etapa inexistente no tipo', () => {
+    expect(indexEtapa(ENCOUNTER_TIPOS.INTERCORRENCIA, 'validar')).toBe(-1);
+  });
+
+  it('ENCOUNTER_TIPO_LABELS tem labels para todos os tipos', () => {
+    Object.values(ENCOUNTER_TIPOS).forEach(t => {
+      expect(ENCOUNTER_TIPO_LABELS[t]).toBeTruthy();
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. F2 — podeAvancar: guard de navegação com encounter
+// ─────────────────────────────────────────────────────────────────────────────
+describe('stepperConfig — podeAvancar (F2)', () => {
+
+  const tipo = ENCOUNTER_TIPOS.RETORNO_QT;
+
+  it('step 0 (tipo): sempre pode avançar', () => {
+    const r = podeAvancar({ step: 0, tipo, temPaciente: false, temEncounter: false });
+    expect(r.ok).toBe(true);
+  });
+
+  it('step 1 (paciente): requer paciente identificado', () => {
+    const semPac = podeAvancar({ step: 1, tipo, temPaciente: false, temEncounter: false });
+    expect(semPac.ok).toBe(false);
+    expect(semPac.motivo).toMatch(/paciente/i);
+  });
+
+  it('step 1 (paciente): ok quando tem paciente', () => {
+    const comPac = podeAvancar({ step: 1, tipo, temPaciente: true, temEncounter: false });
+    expect(comPac.ok).toBe(true);
+  });
+
+  it('step 2 (evolucao): requer encounter aberto', () => {
+    const semEnc = podeAvancar({ step: 2, tipo, temPaciente: true, temEncounter: false });
+    expect(semEnc.ok).toBe(false);
+    expect(semEnc.motivo).toMatch(/atendimento/i);
+  });
+
+  it('step 2 (evolucao): ok com paciente e encounter', () => {
+    const ok = podeAvancar({ step: 2, tipo, temPaciente: true, temEncounter: true });
+    expect(ok.ok).toBe(true);
+  });
+
+  it('step 3 (validar): bloqueado sem encounter', () => {
+    const r = podeAvancar({ step: 3, tipo, temPaciente: true, temEncounter: false });
+    expect(r.ok).toBe(false);
+  });
+
+  it('podeAvancar INTERCORRENCIA step 2 (conduta): requer encounter', () => {
+    const r = podeAvancar({
+      step: 2,
+      tipo: ENCOUNTER_TIPOS.INTERCORRENCIA,
+      temPaciente: true,
+      temEncounter: false,
+    });
+    expect(r.ok).toBe(false);
   });
 });
 

@@ -1,92 +1,133 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// StepperMedico.jsx — Fluxo guiado em 5 etapas para o médico oncologista
-// Paciente → Resumo IA → Validar APAC → APAC/Prescrição → Concluir
-// P4 — UI médica simplificada
+// StepperMedico.jsx — Fluxo guiado por tipo de consulta (F2)
+//
+// Etapa 0: Seleção de tipo de consulta → abre encounter F0
+// Etapas 1+: Adaptativas por tipo (RETORNO_QT tem Validar APAC, INTERCORRENCIA tem Conduta, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useMemo } from "react";
-import { N, G, VE, VM, AM, T } from "../../utils/constants";
+import { N, G, VE, VM, AM } from "../../utils/constants";
 import { sc_, Btn, NOW } from "../../components/ui/primitives";
 import { validarAPAC } from "../../utils/dossie";
 import { resolverAPACCompleta } from "../../utils/apacDeterministico";
 import { APACDossieChecklist, APACEntradaRapida } from "./APACDossieComps";
 import { DocumentosPosEvolucao } from "./DossieBarComponents";
 import ProntuarioDossieUnico from "./ProntuarioDossieUnico";
+import EncounterHeader from "../../components/EncounterHeader";
+import { useEncounter } from "../../contexts/EncounterContext";
+import {
+  getEtapas, getMaxStep, podeAvancar, TIPO_DEFAULT,
+  ENCOUNTER_TIPOS, ENCOUNTER_TIPO_LABELS,
+} from "../../utils/stepperConfig";
 
-// ── Definicao das etapas ──────────────────────────────────────────────────────
+// ── Cards de tipo de consulta ─────────────────────────────────────────────────
 
-const ETAPAS = [
-  { id: "paciente",    icone: "👤", label: "Paciente"      },
-  { id: "resumo",      icone: "🧠", label: "Resumo IA"     },
-  { id: "validar",     icone: "✅", label: "Validar APAC"  },
-  { id: "apac",        icone: "📋", label: "APAC/Prescrição"},
-  { id: "concluir",    icone: "🏁", label: "Concluir"      },
-];
+const TIPO_CONFIG = {
+  [ENCOUNTER_TIPOS.RETORNO_QT]: {
+    icone:    '💊',
+    descricao: 'Retorno de quimioterapia — ciclo, evolução e APAC QT',
+    cor:       '#1B365D',
+    bg:        '#EFF6FF',
+    border:    '#1B365D',
+  },
+  [ENCOUNTER_TIPOS.RETORNO_CLINICO]: {
+    icone:    '🩺',
+    descricao: 'Consulta clínica de seguimento — evolução sem APAC QT',
+    cor:       '#065F46',
+    bg:        '#ECFDF5',
+    border:    '#065F46',
+  },
+  [ENCOUNTER_TIPOS.PRIMEIRA_CONSULTA]: {
+    icone:    '📋',
+    descricao: 'Primeira consulta — anamnese completa e APAC inicial',
+    cor:       '#7C3AED',
+    bg:        '#F5F3FF',
+    border:    '#7C3AED',
+  },
+  [ENCOUNTER_TIPOS.INTERCORRENCIA]: {
+    icone:    '⚡',
+    descricao: 'Intercorrência urgente — conduta rápida sem APAC',
+    cor:       '#991B1B',
+    bg:        '#FFF5F5',
+    border:    '#991B1B',
+  },
+};
 
-// ── Barra de progresso ────────────────────────────────────────────────────────
+// ── Etapa 0 — Seleção de tipo de consulta ────────────────────────────────────
 
-function StepBar({ step, onStep, apacScore }) {
+function EtapaTipo({ tipo, onSelectTipo, pac }) {
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 0,
-      background: "#F8FAFC", borderBottom: "1px solid #E2E8F0",
-      padding: "10px 16px", marginBottom: 16, borderRadius: "10px 10px 0 0",
-    }}>
-      {ETAPAS.map((e, i) => {
-        const ativo    = i === step;
-        const concluido = i < step;
-        const cor      = concluido ? VE : ativo ? G : "#CBD5E1";
-        const txtCor   = concluido ? VE : ativo ? G : "#94A3B8";
-        return (
-          <React.Fragment key={e.id}>
+    <div style={{ display: "grid", gap: 10 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 4 }}>
+        Selecione o tipo de consulta para {pac?.nome ? <strong>{pac.nome}</strong> : "o paciente"}:
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {Object.entries(TIPO_CONFIG).map(([t, cfg]) => {
+          const selecionado = tipo === t;
+          return (
             <button
-              onClick={() => onStep(i)}
+              key={t}
+              onClick={() => onSelectTipo(t)}
               style={{
-                display: "flex", flexDirection: "column", alignItems: "center",
-                gap: 3, border: "none", cursor: "pointer",
-                padding: "4px 10px", borderRadius: 8,
-                background: ativo ? "#EFF6FF" : "transparent",
-                outline: "none",
+                display:       "flex",
+                flexDirection: "column",
+                alignItems:    "flex-start",
+                gap:           6,
+                padding:       "14px 16px",
+                border:        `2px solid ${selecionado ? cfg.border : "#E2E8F0"}`,
+                borderRadius:  12,
+                background:    selecionado ? cfg.bg : "#FAFAFA",
+                cursor:        "pointer",
+                textAlign:     "left",
+                transition:    "all .15s",
+                boxShadow:     selecionado ? `0 2px 8px ${cfg.border}33` : "none",
               }}
             >
+              <div style={{ fontSize: 24 }}>{cfg.icone}</div>
               <div style={{
-                width: 32, height: 32, borderRadius: "50%",
-                background: concluido ? VE : ativo ? G : "#F1F5F9",
-                border: "2px solid " + cor,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: concluido ? 14 : 15, color: concluido ? "#fff" : ativo ? "#fff" : "#94A3B8",
-                fontWeight: 900, transition: "all .2s",
+                fontSize:   13,
+                fontWeight: 900,
+                color:      selecionado ? cfg.cor : "#1E293B",
               }}>
-                {concluido ? "✓" : e.icone}
+                {ENCOUNTER_TIPO_LABELS[t]}
               </div>
-              <span style={{ fontSize: 10, fontWeight: 900, color: txtCor, whiteSpace: "nowrap" }}>
-                {e.label}
-              </span>
-              {/* Badge score APAC na etapa Validar */}
-              {e.id === "validar" && apacScore != null && (
-                <span style={{
-                  fontSize: 9, fontWeight: 900,
-                  color: apacScore >= 80 ? VE : apacScore >= 50 ? AM : VM,
+              <div style={{
+                fontSize:  11,
+                color:     selecionado ? cfg.cor : "#64748B",
+                lineHeight: 1.4,
+              }}>
+                {cfg.descricao}
+              </div>
+              {selecionado && (
+                <div style={{
+                  marginTop:  4,
+                  fontSize:   10,
+                  fontWeight: 900,
+                  color:      cfg.cor,
+                  background: cfg.border + "22",
+                  borderRadius: 8,
+                  padding:    "3px 8px",
                 }}>
-                  {apacScore}/100
-                </span>
+                  ✓ Selecionado
+                </div>
               )}
             </button>
-            {/* Linha conectora */}
-            {i < ETAPAS.length - 1 && (
-              <div style={{
-                flex: 1, height: 2,
-                background: i < step ? VE : "#E2E8F0",
-                transition: "background .3s",
-              }} />
-            )}
-          </React.Fragment>
-        );
-      })}
+          );
+        })}
+      </div>
+      {!pac?.pacID && !pac?.cpf && !pac?.cns && (
+        <div style={{
+          background: "#FEF2F2", border: "1px solid " + VM + "55",
+          borderRadius: 8, padding: "10px 14px",
+          fontSize: 12, color: VM, fontWeight: 700,
+        }}>
+          ⚠️ Nenhum paciente ativo. Selecione um paciente antes de iniciar o atendimento.
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Etapa 0 — Paciente ────────────────────────────────────────────────────────
+// ── Etapa Paciente ────────────────────────────────────────────────────────────
 
 function EtapaPaciente({ pac }) {
   const campos = [
@@ -135,13 +176,36 @@ function EtapaPaciente({ pac }) {
   );
 }
 
-// ── Etapa 4 — Concluir ────────────────────────────────────────────────────────
+// ── Etapa Conduta Urgente (INTERCORRENCIA) ────────────────────────────────────
+
+function EtapaConduta({ pac, dossie, addMsg }) {
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div style={{
+        background: "#FFF5F5", border: "1px solid #FCA5A5",
+        borderRadius: 10, padding: "12px 16px",
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 900, color: "#991B1B", marginBottom: 6 }}>
+          ⚡ Intercorrência — Conduta urgente
+        </div>
+        <div style={{ fontSize: 12, color: "#7F1D1D", lineHeight: 1.6 }}>
+          Paciente: <strong>{pac?.nome || "—"}</strong><br />
+          Diagnóstico: {pac?.diag || "—"} · CID: {pac?.cid || "—"}<br />
+          Protocolo: {pac?.trat || "—"} · ECOG: {pac?.ecog || "—"}
+        </div>
+      </div>
+      <DocumentosPosEvolucao dossie={dossie} addMsg={addMsg} />
+    </div>
+  );
+}
+
+// ── Etapa Concluir ────────────────────────────────────────────────────────────
 
 function EtapaConcluir({ pac, dossie, apac, resolucao, onSalvarEvolucao, onAbrirAPAC, onNovo }) {
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(!!dossie?.evolucao?.textoFinal);
 
-  const docsGerados  = dossie?.documentosGerados || [];
+  const docsGerados   = dossie?.documentosGerados || [];
   const evolucaoFinal = dossie?.evolucao?.textoFinal || dossie?.evolucao?.rascunho || "";
 
   const handleSalvar = async () => {
@@ -154,7 +218,7 @@ function EtapaConcluir({ pac, dossie, apac, resolucao, onSalvarEvolucao, onAbrir
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      {/* Resumo do atendimento */}
+      {/* Resumo */}
       <div style={sc_.card({ border: "2px solid " + VE + "55" })}>
         <div style={{ fontSize: 13, fontWeight: 900, color: N, marginBottom: 10 }}>
           Resumo do atendimento — {pac?.nome || "Paciente"}
@@ -162,11 +226,8 @@ function EtapaConcluir({ pac, dossie, apac, resolucao, onSalvarEvolucao, onAbrir
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
           <div style={{ background: "#EAF7EE", borderRadius: 8, padding: "8px 12px" }}>
             <div style={{ fontSize: 9, color: "#64748B", fontWeight: 900, textTransform: "uppercase" }}>Score APAC</div>
-            <div style={{
-              fontSize: 20, fontWeight: 900,
-              color: resolucao?.scoreAntiGlosa >= 80 ? VE : resolucao?.scoreAntiGlosa >= 50 ? AM : VM,
-            }}>
-              {resolucao?.scoreAntiGlosa ?? apac?.riscoGlosa === "baixo" ? "✅" : "—"}/100
+            <div style={{ fontSize: 20, fontWeight: 900, color: resolucao?.scoreAntiGlosa >= 80 ? VE : resolucao?.scoreAntiGlosa >= 50 ? AM : VM }}>
+              {resolucao?.scoreAntiGlosa ?? "—"}/100
             </div>
           </div>
           <div style={{ background: "#F8FAFC", borderRadius: 8, padding: "8px 12px" }}>
@@ -185,7 +246,7 @@ function EtapaConcluir({ pac, dossie, apac, resolucao, onSalvarEvolucao, onAbrir
         )}
         {resolucao?.inconsistencias?.length > 0 && (
           <div style={{ marginTop: 6, fontSize: 11, color: "#7C3AED", fontWeight: 800 }}>
-            Inconsistências a revisar: {resolucao.inconsistencias.join(" · ")}
+            Inconsistências: {resolucao.inconsistencias.join(" · ")}
           </div>
         )}
       </div>
@@ -209,24 +270,77 @@ function EtapaConcluir({ pac, dossie, apac, resolucao, onSalvarEvolucao, onAbrir
             dis={salvando || !evolucaoFinal.trim()}
             onClick={handleSalvar}
           />
-          <Btn
-            v="gold"
-            ch="Abrir APAC anti-glosa"
-            s={{ flex: 1, padding: 11 }}
-            onClick={onAbrirAPAC}
-          />
+          <Btn v="gold" ch="Abrir APAC anti-glosa" s={{ flex: 1, padding: 11 }} onClick={onAbrirAPAC} />
         </div>
       </div>
 
-      {/* Novo atendimento */}
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <Btn
-          v="ghost"
-          ch="🗑 Novo atendimento"
-          s={{ fontSize: 11, padding: "8px 14px" }}
-          onClick={onNovo}
-        />
+        <Btn v="ghost" ch="🗑 Novo atendimento" s={{ fontSize: 11, padding: "8px 14px" }} onClick={onNovo} />
       </div>
+    </div>
+  );
+}
+
+// ── Barra de progresso ────────────────────────────────────────────────────────
+
+function StepBar({ step, onStep, etapas, apacScore }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 0,
+      background: "#F8FAFC", borderBottom: "1px solid #E2E8F0",
+      padding: "10px 16px", marginBottom: 16, borderRadius: "10px 10px 0 0",
+      overflowX: "auto",
+    }}>
+      {etapas.map((e, i) => {
+        const ativo     = i === step;
+        const concluido = i < step;
+        const cor       = concluido ? VE : ativo ? G : "#CBD5E1";
+        const txtCor    = concluido ? VE : ativo ? G : "#94A3B8";
+        return (
+          <React.Fragment key={e.id}>
+            <button
+              onClick={() => onStep(i)}
+              style={{
+                display: "flex", flexDirection: "column", alignItems: "center",
+                gap: 3, border: "none", cursor: "pointer",
+                padding: "4px 10px", borderRadius: 8,
+                background: ativo ? "#EFF6FF" : "transparent",
+                outline: "none", flexShrink: 0,
+              }}
+            >
+              <div style={{
+                width: 32, height: 32, borderRadius: "50%",
+                background: concluido ? VE : ativo ? G : "#F1F5F9",
+                border: "2px solid " + cor,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: concluido ? 14 : 15, color: concluido ? "#fff" : ativo ? "#fff" : "#94A3B8",
+                fontWeight: 900, transition: "all .2s",
+              }}>
+                {concluido ? "✓" : e.icone}
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 900, color: txtCor, whiteSpace: "nowrap" }}>
+                {e.label}
+              </span>
+              {/* Badge score APAC na etapa validar */}
+              {e.id === "validar" && apacScore != null && (
+                <span style={{
+                  fontSize: 9, fontWeight: 900,
+                  color: apacScore >= 80 ? VE : apacScore >= 50 ? AM : VM,
+                }}>
+                  {apacScore}/100
+                </span>
+              )}
+            </button>
+            {i < etapas.length - 1 && (
+              <div style={{
+                flex: "0 0 16px", height: 2, minWidth: 8,
+                background: i < step ? VE : "#E2E8F0",
+                transition: "background .3s",
+              }} />
+            )}
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -237,33 +351,62 @@ export default function StepperMedico({
   pac, dossie, setDossie, up, addMsg,
   onSalvarEvolucao, onAbrirAPAC, onLimpar,
 }) {
-  const [step, setStep] = useState(0);
+  const { encounter, openEncounterSession, isOpen } = useEncounter();
 
-  // Derivados memoizados para não recalcular em cada render
+  // Tipo: começa pelo tipo já inferido do encounter ativo, ou default
+  const tipoInicial = encounter?.tipo || TIPO_DEFAULT;
+  const [tipo, setTipo]  = useState(tipoInicial);
+  const [step, setStep]  = useState(0);
+
+  // Etapas dinâmicas conforme tipo selecionado
+  const etapas  = useMemo(() => getEtapas(tipo),  [tipo]);
+  const maxStep = useMemo(() => etapas.length - 1, [etapas]);
+
+  // Derivados memoizados APAC
   const apac = useMemo(() => validarAPAC(dossie || {}), [
     dossie?.paciente?.cid, dossie?.paciente?.diag, dossie?.paciente?.cns,
     dossie?.paciente?.nome, dossie?.documentos?.length, dossie?.evolucao?.textoFinal,
   ]);
-
   const resolucao = useMemo(() =>
     apac.resolucao || resolverAPACCompleta(dossie?.paciente || pac || {}, dossie || {}),
     [apac]
   );
 
   const temPaciente = !!(pac?.pacID || pac?.cpf || pac?.cns);
+  const temEncounter = isOpen;
 
-  const avancar  = () => setStep(s => Math.min(s + 1, ETAPAS.length - 1));
-  const voltar   = () => setStep(s => Math.max(s - 1, 0));
+  // Ao selecionar tipo no step 0 → abre encounter se paciente identificado
+  const handleSelectTipo = (novoTipo) => {
+    setTipo(novoTipo);
+    if (temPaciente && !isOpen) {
+      const patId = pac?.pacID || pac?.cpf || pac?.cns;
+      openEncounterSession(String(patId), novoTipo);
+    }
+  };
+
+  const avancar = () => {
+    const check = podeAvancar({ step, tipo, temPaciente, temEncounter });
+    if (!check.ok) { alert(check.motivo); return; }
+    setStep(s => Math.min(s + 1, maxStep));
+  };
+  const voltar  = () => setStep(s => Math.max(s - 1, 0));
+
   const primeiro = step === 0;
-  const ultimo   = step === ETAPAS.length - 1;
+  const ultimo   = step === maxStep;
+  const etapaAtual = etapas[step];
 
-  // Renderiza conteudo da etapa atual
+  // ── Render de cada etapa ────────────────────────────────────────────────────
   const renderEtapa = () => {
-    switch (step) {
-      case 0:
+    const id = etapaAtual?.id;
+
+    switch (id) {
+      case 'tipo':
+        return <EtapaTipo tipo={tipo} onSelectTipo={handleSelectTipo} pac={pac} />;
+
+      case 'paciente':
         return <EtapaPaciente pac={pac} />;
 
-      case 1:
+      case 'evolucao':
         return (
           <ProntuarioDossieUnico
             pac={pac}
@@ -272,36 +415,39 @@ export default function StepperMedico({
             up={up}
             addMsg={addMsg}
             onSalvarEvolucao={onSalvarEvolucao}
-            onAbrirAPAC={() => setStep(3)}
+            onAbrirAPAC={() => {
+              const iApac = etapas.findIndex(e => e.id === 'apac');
+              if (iApac > -1) setStep(iApac);
+            }}
           />
         );
 
-      case 2:
+      case 'validar':
         return (
           <div style={{ display: "grid", gap: 12 }}>
             <APACDossieChecklist dossie={dossie} setDossie={setDossie} />
-            {resolucao.inferidos.length > 0 && (
+            {resolucao.inferidos?.length > 0 && (
               <div style={{
                 background: "#FFFBEB", border: "1px solid " + AM + "44",
                 borderRadius: 10, padding: "10px 14px", fontSize: 12, color: AM, fontWeight: 700,
               }}>
-                🤖 Os campos abaixo foram <strong>inferidos por IA</strong> e precisam de confirmação médica antes de imprimir a APAC:<br />
+                🤖 Campos <strong>inferidos por IA</strong> — confirmar antes de imprimir APAC:<br />
                 <span style={{ fontWeight: 900 }}>{resolucao.inferidos.join(" · ")}</span>
               </div>
             )}
-            {resolucao.inconsistencias.length > 0 && (
+            {resolucao.inconsistencias?.length > 0 && (
               <div style={{
                 background: "#EDE9FE", border: "1px solid #7C3AED44",
                 borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#7C3AED", fontWeight: 700,
               }}>
-                ⚠️ <strong>Inconsistências detectadas</strong> — o valor inserido difere da inferência da IA. Verifique:<br />
+                ⚠️ <strong>Inconsistências</strong> — verificar:<br />
                 <span style={{ fontWeight: 900 }}>{resolucao.inconsistencias.join(" · ")}</span>
               </div>
             )}
           </div>
         );
 
-      case 3:
+      case 'apac':
         return (
           <div style={{ display: "grid", gap: 16 }}>
             <APACEntradaRapida pac={pac} up={up} dossie={dossie} setDossie={setDossie} addMsg={addMsg} />
@@ -309,7 +455,10 @@ export default function StepperMedico({
           </div>
         );
 
-      case 4:
+      case 'conduta':
+        return <EtapaConduta pac={pac} dossie={dossie} addMsg={addMsg} />;
+
+      case 'concluir':
         return (
           <EtapaConcluir
             pac={pac}
@@ -329,8 +478,18 @@ export default function StepperMedico({
 
   return (
     <div style={{ display: "grid", gap: 0 }}>
-      {/* Barra de progresso */}
-      <StepBar step={step} onStep={setStep} apacScore={resolucao?.scoreAntiGlosa} />
+      {/* F0 — Cabeçalho de auditoria clínica */}
+      <div style={{ marginBottom: 8 }}>
+        <EncounterHeader pac={pac} compact />
+      </div>
+
+      {/* Barra de progresso adaptativa */}
+      <StepBar
+        step={step}
+        onStep={setStep}
+        etapas={etapas}
+        apacScore={resolucao?.scoreAntiGlosa}
+      />
 
       {/* Aviso sem paciente nas etapas clínicas */}
       {!temPaciente && step > 0 && (
@@ -340,6 +499,17 @@ export default function StepperMedico({
           fontSize: 12, color: VM, fontWeight: 800,
         }}>
           ⚠️ Selecione um paciente para continuar esta etapa.
+        </div>
+      )}
+
+      {/* Aviso sem encounter nas etapas clínicas (após paciente) */}
+      {!temEncounter && step > 1 && (
+        <div style={{
+          background: "#FFF7E6", border: "1px solid " + AM + "55",
+          borderRadius: 10, padding: "10px 14px", marginBottom: 12,
+          fontSize: 12, color: AM, fontWeight: 800,
+        }}>
+          ⚠️ Atendimento não iniciado. Volte ao passo "Tipo" e selecione o tipo de consulta para abrir o atendimento.
         </div>
       )}
 
@@ -360,7 +530,7 @@ export default function StepperMedico({
           onClick={voltar}
         />
         <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 700 }}>
-          {step + 1} / {ETAPAS.length} — {ETAPAS[step].label}
+          {step + 1} / {etapas.length} — {etapaAtual?.label}
         </div>
         {!ultimo ? (
           <Btn
@@ -371,7 +541,7 @@ export default function StepperMedico({
             onClick={avancar}
           />
         ) : (
-          <div style={{ width: 100 }} /> // spacer
+          <div style={{ width: 100 }} />
         )}
       </div>
     </div>
