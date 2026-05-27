@@ -22,9 +22,23 @@ function APACDossieChecklist({dossie,setDossie}){
   // P3 — resolucao deterministica por campo
   const resolucao=apac.resolucao||resolverAPACCompleta(pac,dossie||{});
   const [expandido,setExpandido]=useState(false);
+  const [campoEdit,setCampoEdit]=useState(null);
+  const [valorEdit,setValorEdit]=useState("");
   useEffect(()=>{if(!(pac?.pacID||pac?.cpf||pac?.cns)){return;}setDossie&&setDossie(d=>({...d,apac,status:apac.completa?"apac_pronta":"apac_validacao",updatedAt:NOW()}));},[apac.pendencias.length]);
   const cor=apac.riscoGlosa==="alto"?VM:apac.riscoGlosa==="moderado"?AM:VE;
   const {scoreAntiGlosa,inconsistencias,inferidos}=resolucao;
+  const iniciarEdicao=(campo,valor)=>{setCampoEdit(campo);setValorEdit(String(valor||""));};
+  const salvarCampo=()=>{
+    if(!campoEdit)return;
+    const valor=valorEdit.trim();
+    setDossie&&setDossie(d=>{
+      const base=d||{};
+      const novo={...base,paciente:{...(base.paciente||{}),[campoEdit]:valor},updatedAt:NOW()};
+      novo.apac=validarAPAC(novo);
+      return novo;
+    });
+    setCampoEdit(null);
+  };
   return <div style={sc_.card({border:"2px solid "+cor+"55",marginBottom:12})}>
     {/* Header */}
     <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:8}}>
@@ -39,13 +53,20 @@ function APACDossieChecklist({dossie,setDossie}){
       {CAMPOS_APAC.map(({campo,label,req})=>{
         const r=resolucao.campos?.[campo]||{status:"ausente",fonte:null,valor:null};
         const meta=STATUS_META[r.status]||STATUS_META.ausente;
-        return <div key={campo} style={{background:meta.bg,border:"1px solid "+meta.cor+"44",borderRadius:8,padding:"6px 8px",position:"relative"}}>
-          <div style={{fontSize:9,color:"#64748B",fontWeight:900,textTransform:"uppercase",marginBottom:2}}>{label}{req?<span style={{color:VM}}> *</span>:""}</div>
+        const editando=campoEdit===campo;
+        return <div key={campo} onClick={()=>!editando&&iniciarEdicao(campo,r.valor)} style={{background:meta.bg,border:"1px solid "+meta.cor+"44",borderRadius:10,padding:"9px 10px",position:"relative",cursor:"pointer",minHeight:72}}>
+          <div style={{fontSize:11,color:"#64748B",fontWeight:950,textTransform:"uppercase",marginBottom:4}}>{label}{req?<span style={{color:VM}}> *</span>:""}</div>
           <div style={{display:"flex",alignItems:"center",gap:4}}>
-            <span style={{fontSize:11}}>{meta.icone}</span>
-            <span style={{fontSize:10,color:meta.cor,fontWeight:900}}>{meta.label}</span>
+            <span style={{fontSize:14}}>{meta.icone}</span>
+            <span style={{fontSize:13,color:meta.cor,fontWeight:950}}>{meta.label}</span>
           </div>
-          {r.valor&&<div style={{fontSize:9,color:"#64748B",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%"}} title={String(r.valor)}>{String(r.valor).slice(0,28)}{String(r.valor).length>28?"…":""}</div>}
+          {editando ? <div onClick={e=>e.stopPropagation()} style={{marginTop:6,display:"grid",gap:6}}>
+            <textarea value={valorEdit} onChange={e=>setValorEdit(e.target.value)} rows={campo==="justif_apac"?4:2} autoFocus style={{width:"100%",boxSizing:"border-box",border:"1px solid "+meta.cor+"66",borderRadius:8,padding:"7px 9px",fontSize:13,color:N,fontFamily:"inherit",resize:"vertical",outline:"none",background:"#fff"}}/>
+            <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
+              <button type="button" onClick={()=>setCampoEdit(null)} style={{border:"1px solid #CBD5E1",background:"#fff",color:"#475569",borderRadius:8,padding:"5px 9px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+              <button type="button" onClick={salvarCampo} style={{border:"none",background:VE,color:"#fff",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+            </div>
+          </div> : r.valor&&<div style={{fontSize:12,color:"#334155",fontWeight:800,marginTop:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%"}} title={String(r.valor)}>{String(r.valor).slice(0,54)}{String(r.valor).length>54?"…":""}</div>}
           {r.fonte&&<div style={{fontSize:8,color:"#94A3B8",marginTop:1}}>{r.fonte}</div>}
           {r.status==="inconsistente"&&r.valorAlternativo&&<div style={{fontSize:8,color:"#7C3AED",marginTop:1}} title={"IA sugere: "+r.valorAlternativo}>IA: {String(r.valorAlternativo).slice(0,18)}</div>}
         </div>;
@@ -76,6 +97,12 @@ function APACEntradaRapida({pac,up,dossie,setDossie,addMsg}){
   const procedimentos=grupo?SIGTAP_CATALOGO[grupo]?.procedimentos||[]:[];
   const proc=procedimentos.find(p=>p.codigo===procCodigo)||null;
   const procedimentosFlat=grupos.flatMap(g=>(SIGTAP_CATALOGO[g]?.procedimentos||[]).map(p=>({...p,grupo:g,labelGrupo:SIGTAP_CATALOGO[g]?.label})));
+  const textoProntuarioAtual=()=>[
+    dossie?.evolucao?.textoFinal,
+    dossie?.evolucao?.rascunho,
+    dossie?.resumoClaude,
+    ...(dossie?.documentos||[]).map(doc=>[doc.tipo,doc.nome,doc.resumo||doc.texto||doc.conteudo].filter(Boolean).join(" - ")),
+  ].filter(Boolean).join("\n\n");
   const aplicarCampos=(override={})=>{
     const tumor=override.tumor||manual.tumor||SIGTAP_CATALOGO[grupo]?.label||pac?.local_cancer||"";
     const cid=override.cid||manual.cid||getCIDPorSede(tumor)?.cid||pac?.cid||"";
@@ -97,8 +124,8 @@ function APACEntradaRapida({pac,up,dossie,setDossie,addMsg}){
     addMsg&&addMsg("APAC","Médico",`Campos APAC atualizados: ${protocolo||"protocolo"} · SIGTAP ${sigtap||"pendente"} · CID ${cid||"pendente"}`,"msg");
   };
   const aplicar=()=>aplicarCampos();
-  const analisarTextoColado=()=>{
-    const txt=String(textoColado||"").trim();
+  const analisarTextoColado=(textoFonte)=>{
+    const txt=String((textoFonte ?? textoColado) || "").trim();
     if(!txt){alert("Cole a evolução, resumo ou tratamento antes de analisar.");return;}
     const camposIA=extrairCamposIA(txt);
     const cidTexto=(txt.match(/\bC\d{2}(?:\.\d)?\b/i)||[])[0]||"";
@@ -133,14 +160,21 @@ function APACEntradaRapida({pac,up,dossie,setDossie,addMsg}){
       `SIGTAP: ${sigtap||"pendente"}`,
     ].join("\n"));
   };
+  const usarProntuarioAtual=()=>{
+    const fonte=textoProntuarioAtual();
+    if(!fonte.trim()){alert("Ainda não há prontuário/resumo disponível para preencher a APAC.");return;}
+    setTextoColado(fonte);
+    analisarTextoColado(fonte);
+  };
   return <div style={sc_.card({border:"2px solid "+T+"44",background:"#F8FAFC"})}>
     <H2 ch="APAC — inserção rápida pelo médico" s={{fontSize:14,margin:"0 0 6px"}}/>
     <p style={{fontSize:12,color:"#64748B",margin:"0 0 12px"}}>Use por clique/rolagem ou digite livremente. Ao concluir, o agente preenche CID, tratamento, SIGTAP e justificativa para revisão.</p>
     <div style={{background:"#fff",border:"1px solid #CBD5E1",borderRadius:12,padding:10,marginBottom:12}}>
       <label style={{fontSize:11,fontWeight:900,color:N,textTransform:"uppercase"}}>Colar evolução/tratamento para preencher APAC</label>
-      <textarea value={textoColado} onChange={e=>setTextoColado(e.target.value)} placeholder="Cole aqui a evolução completa, resumo externo, tratamento proposto ou discussão do caso. O agente extrai diagnóstico, CID, linha, intenção, protocolo e SIGTAP quando houver." rows={5} style={{...sc_.inp,width:"100%",resize:"vertical",marginTop:6,fontSize:12,lineHeight:1.55}}/>
+      <textarea value={textoColado} onChange={e=>setTextoColado(e.target.value)} placeholder="Cole aqui a evolução completa, resumo externo, tratamento proposto ou discussão do caso. O agente extrai diagnóstico, CID, linha, intenção, protocolo e SIGTAP quando houver." rows={9} style={{...sc_.inp,width:"100%",resize:"vertical",marginTop:6,fontSize:13,lineHeight:1.55,minHeight:220}}/>
       <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center",flexWrap:"wrap"}}>
-        <Btn v="navy" ch="Analisar texto e preencher APAC" s={{padding:"9px 14px"}} onClick={analisarTextoColado}/>
+        <Btn v="navy" ch="Analisar texto e preencher APAC" s={{padding:"9px 14px"}} onClick={()=>analisarTextoColado()}/>
+        <Btn v="teal" ch="Usar prontuário atual" s={{padding:"9px 14px"}} onClick={usarProntuarioAtual}/>
         <Btn v="ghost" ch="Limpar" s={{padding:"9px 12px"}} onClick={()=>{setTextoColado("");setPreviewColagem("");}}/>
       </div>
       {previewColagem&&<pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",fontSize:11,lineHeight:1.6,background:"#F8FAFC",border:"1px solid #DDE3EC",borderRadius:9,padding:"8px 10px",margin:"8px 0 0",color:N}}>{previewColagem}</pre>}

@@ -61,15 +61,17 @@ export function integrarDocumentoNoDossie(doc, { pac, dossie, setDossie, up, add
 
   // ── 2. Aplicar campos IA ao paciente (só preenche vazios) ─────────────────
   const campos = doc.camposIA || {};
+  const camposAplicados = {};
   if (up && Object.keys(campos).length) {
     Object.entries(campos).forEach(([k, v]) => {
-      if (v && !pac?.[k]) up(k, v);
+      if (v && !pac?.[k]) { up(k, v); camposAplicados[k] = v; }
     });
   }
 
   // ── 3. Rastreabilidade: acumular resumo em docs_ia_resumo ─────────────────
+  const newDocsIaResumo = (pac?.docs_ia_resumo || "") + "\n\n---\n[" + origemLabel + "]\n" + doc.resumo;
   if (up && doc.resumo) {
-    up("docs_ia_resumo", (pac?.docs_ia_resumo || "") + "\n\n---\n[" + origemLabel + "]\n" + doc.resumo);
+    up("docs_ia_resumo", newDocsIaResumo);
   }
 
   // ── 4. Construir novo estado canônico do dossiê ───────────────────────────
@@ -78,9 +80,17 @@ export function integrarDocumentoNoDossie(doc, { pac, dossie, setDossie, up, add
   const semDuplicata = (base.documentos || []).filter(x => String(x.id) !== String(doc.id));
   const novoClaude   = [base.resumoClaude, doc.resumo].filter(Boolean).join("\n\n---\n");
 
+  // Inclui campos novos diretamente (sem esperar React state de up())
+  const novoPaciente = {
+    ...(base.paciente || {}),
+    ...pac,
+    ...camposAplicados,
+    docs_ia_resumo: doc.resumo ? newDocsIaResumo : (pac?.docs_ia_resumo || ""),
+  };
+
   const novoDossie = {
     ...base,
-    paciente:     { ...(base.paciente || {}), ...pac },
+    paciente:     novoPaciente,
     documentos:   [doc, ...semDuplicata],
     resumoClaude: novoClaude,
     status:       "pronto_medico",

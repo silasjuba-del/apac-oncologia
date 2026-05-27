@@ -12,7 +12,8 @@
  *   'pac.cid', 'pac.diag', 'ia:diagCID', 'doc:laudo.pdf', 'ia:anatom', 'dossie:evolucao'
  */
 
-import { getCIDFromDiag, getSIGTAPFromDiag } from './apacValidator';
+import { getCIDFromDiag } from './apacValidator';
+import { resolverSIGTAP } from './sigtapResolver';
 
 // ── Helpers internos ──────────────────────────────────────────────────────────
 
@@ -146,10 +147,12 @@ export function resolverCampoAPAC(campo, pac = {}, dossie = null) {
     // ── Procedimento SIGTAP ───────────────────────────────────────────────────
 
     case 'cod_proc': {
-      if (_v(pac.cod_proc)) return _ok(pac.cod_proc, 'pac.cod_proc');
-      const sigtap = getSIGTAPFromDiag(pac.diag);
-      if (sigtap?.codigo) return _inf(sigtap.codigo, 'ia:diagSIGTAP');
-      return _ausente();
+      // Usa resolverSIGTAP (cadeia CID→mapa→texto) como fonte única.
+      // Elimina duplicação e garante mapa CID→SIGTAP mais completo.
+      const r = resolverSIGTAP(pac);
+      if (r.status === 'ausente') return _ausente();
+      if (r.status === 'preenchido') return _ok(r.codigo, r.fonte || 'pac.cod_proc');
+      return _inf(r.codigo, r.fonte || 'ia:sigtapResolver');
     }
 
     // ── Justificativa clinica ─────────────────────────────────────────────────
@@ -339,6 +342,10 @@ export function resolverAPACCompleta(pac = {}, dossie = null) {
       ? 'moderado'
       : 'baixo';
 
+  // bloqueante = true quando imprimir/enviar APAC deve ser desabilitado na UI.
+  // Critério: algum campo obrigatório AUSENTE (glosa certa) ou score muito baixo.
+  const bloqueante = criticas.length > 0 || scoreAntiGlosa < 60;
+
   return {
     campos,
     pendencias,
@@ -349,6 +356,7 @@ export function resolverAPACCompleta(pac = {}, dossie = null) {
     scoreAntiGlosa,
     riscoGlosa,
     completa: pendencias.length === 0 && inconsistencias.length === 0,
+    bloqueante,
   };
 }
 

@@ -3,15 +3,19 @@
 // Extraído de App.jsx
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useRef, useEffect } from "react";
-import { N, G, T, VE, VM, AM } from "../../utils/constants";
-import { getCIDPorSede } from "../../utils/constants";
-import { sc_, H2, Btn, CampoCadastro, CampoLinhaCadastro, TODAY } from "../../components/ui/primitives";
+import {
+  N, G, T, VE, VM, AM, BG,
+  SINTOMAS_ONCOLOGICOS, TODOS_SINTOMAS_ONCOLOGICOS,
+  getCIDPorSede,
+} from "../../utils/constants";
+import { sc_, H2, Btn, CampoCadastro, CampoLinhaCadastro, TopBar, TODAY } from "../../components/ui/primitives";
 import { limparMarkdown } from "../../components/ui/primitives";
-import { chamarClaude } from "../../utils/api";
+import { agentCallText, AGENT_INTENTS } from "../../utils/agentGateway";
 import { extrairCamposIA } from "../../utils/parse";
 
 async function IA_resumirDados(dadosRecepcao,dadosPaciente){
   const dados={...dadosRecepcao,...dadosPaciente};
+  const pac=dadosPaciente;
   const prompt=`Você é assistente oncológico do Dr. Silas Negrão, Hospital do Bem, Patos-PB.
 Com base nos dados abaixo, gere UM ÚNICO resumo para prontuário. Sem markdown, sem asteriscos, sem traços decorativos.
 Retorne EXATAMENTE neste formato:
@@ -39,11 +43,22 @@ LAUDOS EM CRONOLOGIA:
 • DD/MM/AA - TIPO DO EXAME - resumo com foco oncológico em uma linha.
 
 Dados recebidos: Local do câncer: ${dados.local_cancer||"—"} · Cidade: ${dados.cidade||"—"} · Sexo: ${dados.sexo||"—"}`;
-  const raw=await chamarClaude(prompt,800);
+  const raw=await agentCallText({prompt,maxTokens:800,intent:AGENT_INTENTS.RESUMO_HISTORICO,pac});
   return limparMarkdown(raw||"");
 }
 
 // ─── PRIMEIRA CONSULTA (PORTAL PACIENTE) ─────────────────────────────────────
+function comTimeout(promise,ms=8000,fallback=""){
+  return new Promise(resolve=>{
+    const t=setTimeout(()=>resolve(fallback),ms);
+    Promise.resolve(promise)
+      .then(v=>{clearTimeout(t);resolve(v);})
+      .catch(()=>{clearTimeout(t);resolve(fallback);});
+  });
+}
+
+const NOW=()=>new Date().toLocaleString("pt-BR");
+
 function PrimConsultaPaciente({pac,up,addMsg,addCaixa,addFila,onDossieCriado,onConcluido,back,alertCount,onAlert}){
   const [passo,setPasso]=useState(0);
   const [form,setForm]=useState(()=>({...pac}));
@@ -111,6 +126,7 @@ function PrimConsultaPaciente({pac,up,addMsg,addCaixa,addFila,onDossieCriado,onC
       cpf:extrairCampoTexto(txt,["cpf"]) || cpf || form.cpf || "",
       rg:extrairCampoTexto(txt,["rg","documento de identidade"]) || form.rg || "",
       cns:extrairCampoTexto(txt,["cart[aã]o nacional de sa[uú]de \\(cns\\)","cart[aã]o nacional de sa[uú]de","cns","cart[aã]o sus","cartao sus","sus"]) || cns || form.cns || "",
+      pai:extrairCampoTexto(txt,["nome do pai","pai","filia[cç][aã]o \\(pai\\)"]) || form.pai || "",
       mae:extrairCampoTexto(txt,["filia[cç][aã]o \\(m[aã]e\\)","nome da m[aã]e","m[aã]e"]) || form.mae || "",
       sexo:extrairCampoTexto(txt,["sexo"]) || form.sexo || "",
       raca_cor:extrairCampoTexto(txt,["ra[cç]a/cor","ra[cç]a","cor"]) || form.raca_cor || "",
@@ -150,14 +166,13 @@ function PrimConsultaPaciente({pac,up,addMsg,addCaixa,addFila,onDossieCriado,onC
     [!cpfOKcad(form.cpf),"CPF válido"],
     [!(form.nasc||"").trim(),"Data de nascimento"],
     [!(form.sexo||"").trim(),"Sexo"],
-    [!(form.raca_cor||form.raca||"").trim(),"Raça/cor"],
     [!(form.mae||"").trim(),"Nome da mãe"],
-    [String(form.tel||"").replace(/\D/g,"").length<10,"Telefone principal"],
+    [String(form.tel||"").replace(/\D/g,"").length<10,"Telefone de contato"],
     [String(form.cep||"").replace(/\D/g,"").length!==8,"CEP"],
     [!(form.logradouro||"").trim(),"Logradouro"],
-    [!(form.numero||"").trim(),"Número ou S/N"],
+    [!(form.numero||"").trim(),"Número"],
     [!(form.bairro||"").trim(),"Bairro"],
-    [!(form.cidade||"").trim(),"Município de residência"],
+    [!(form.cidade||"").trim(),"Cidade"],
     [!(form.uf||"").trim(),"UF"],
   ].filter(x=>x[0]).map(x=>x[1]);
   const dadosCompletos=camposPendentesAPAC.length===0;
@@ -170,17 +185,12 @@ function PrimConsultaPaciente({pac,up,addMsg,addCaixa,addFila,onDossieCriado,onC
     "",
     "DADOS DEMOGRÁFICOS",
     "Paciente: "+(form.nome||"—"),
-    "Nome social/apelido: "+(form.nome_social||"—")+" · Prontuário: "+(form.prontuario||form.pacID||"—"),
-    "Nascimento: "+(form.nasc||"—")+" · Idade: "+(form.idade||"—")+" · Sexo: "+(form.sexo||"—"),
+    "Nascimento: "+(form.nasc||"—")+" · Sexo: "+(form.sexo||"—"),
     "CPF: "+(form.cpf||"—")+" · CNS: "+(form.cns||"—")+" · RG: "+(form.rg||"—"),
-    "Raça/Cor: "+(form.raca_cor||form.raca||"—")+" · Etnia: "+(form.etnia||"—"),
-    "Mãe: "+(form.mae||"—"),
-    "Acompanhante: "+(form.acompanhante_nome||"—"),
-    "Responsável: "+(form.responsavel_nome||"—")+" · Parentesco: "+(form.responsavel_parentesco||"—")+" · Telefone responsável: "+(form.responsavel_telefone||"—"),
-    "Telefone principal: "+(form.tel||"—")+" · Celular/WhatsApp: "+(form.telefone_celular||"—")+" · Alternativo: "+(form.telefone_alternativo||"—"),
-    "Endereço: "+(form.endereco||[form.tipo_logradouro,form.logradouro,form.numero?`nº ${form.numero}`:"",form.complemento,form.bairro?`Bairro ${form.bairro}`:"",[form.cidade,form.uf].filter(Boolean).join(" / "),form.cep?`CEP ${form.cep}`:""].filter(Boolean).join(", ")||"—"),
-    "Município residência: "+(form.cidade||"—")+" · Código IBGE: "+(form.municipio_cod||"—")+" · UF: "+(form.uf||"—")+" · Zona: "+(form.zona||"—"),
+    "Pai: "+(form.pai||"—")+" · Mãe: "+(form.mae||"—"),
     "Naturalidade: "+(form.naturalidade||"—"),
+    "Telefone: "+(form.tel||"—"),
+    "Endereço: "+[form.logradouro,form.numero?`nº ${form.numero}`:"",form.bairro?`Bairro ${form.bairro}`:"",[form.cidade,form.uf].filter(Boolean).join(" / "),form.cep?`CEP ${form.cep}`:""].filter(Boolean).join(", ")||"—",
     "Local do câncer informado pelo paciente: "+(form.local_cancer||"—"),
     "CID sugerido pela sede: "+(form.cid_sugerido||cidSugeridoSede?.cid||"—")+" "+(cidSugeridoSede?.sede?`(${cidSugeridoSede.sede})`:"")+" — confirmar pelo médico",
     "",
@@ -209,18 +219,67 @@ function PrimConsultaPaciente({pac,up,addMsg,addCaixa,addFila,onDossieCriado,onC
   const enviar=async()=>{
     if(!cadastroIdentificado){alert("Informe pelo menos nome, CPF, CNS ou telefone antes de enviar para a recepção.");return;}
     setEnviando(true);
+    const destravarEnvio=setTimeout(()=>setEnviando(false),12000);
     const formEnv={...form,cid_sugerido:form.cid_sugerido||cidSugeridoSede?.cid||""};
-    Object.entries(formEnv).forEach(([k,v])=>up&&up(k,v));
+    try{Object.entries(formEnv).forEach(([k,v])=>up&&up(k,v));}catch(e){console.error("[PrimeiraConsulta] Falha ao gravar campos",e);}
     const resumo=resumoEditavel||montarResumo();
-    const pacienteEntrada={...pac,...formEnv,sintomas_atuais:sintomasTexto(),pre_consulta_em:NOW()};
+    const pacienteEntrada={...pac,...formEnv,status:"aguardando_recepcao",sintomas_atuais:sintomasTexto(),pre_consulta_em:NOW()};
     const documentos=arqs.map(a=>({id:Date.now()+Math.random(),tipo:a.tipo||"Upload",nome:a.n,origem:"paciente",criadoEm:NOW()}));
+    try{
+      addCaixa&&addCaixa({de:form.nome||"Paciente",titulo:"Primeira Consulta — "+(form.nome||"—"),conteudo:resumo,tipo:"primeira_consulta",paciente:pacienteEntrada,status:"aguardando_recepcao"});
+      if(addFila&&form.nome)addFila({nome:form.nome,proto:"Primeira consulta",ciclo:"Nova consulta",chegada:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),status:"aguardando_recepcao",origem:"paciente",pacID:pacienteEntrada.pacID,paciente:pacienteEntrada,resumo});
+      addMsg&&addMsg("Paciente","Recepção","Primeira consulta enviada: "+(form.nome||"—")+". Dossiê aguardando conferência.","msg");
+      addMsg&&addMsg("Paciente","Médico","Nova pré-consulta: "+(form.nome||"—")+". Aguardando recepção.","standby");
+      const pendentes=JSON.parse(localStorage.getItem("apacapp_recepcao_preconsultas")||"[]");
+      localStorage.setItem("apacapp_recepcao_preconsultas",JSON.stringify([{de:form.nome||"Paciente",titulo:"Primeira Consulta — "+(form.nome||"—"),conteudo:resumo,tipo:"primeira_consulta",paciente:pacienteEntrada,status:"aguardando_recepcao",criadoEm:new Date().toISOString()},...pendentes].slice(0,80)));
+    }catch(e){
+      console.error("[PrimeiraConsulta] Falha ao sinalizar recepção",e);
+    }
+    clearTimeout(destravarEnvio);
+    setEnviando(false);
+    setPasso(4);
+
+    // Depois que o paciente recebe confirmação, o dossiê é montado em segundo plano.
+    setTimeout(()=>{
+      try{
+        onDossieCriado&&onDossieCriado({paciente:pacienteEntrada,status:"aguardando_recepcao",resumoEntrada:resumo,documentos});
+      }catch(e){
+        console.error("[PrimeiraConsulta] Falha ao criar dossiê provisório",e);
+      }
+    },0);
+    return;
+    try{
+      onDossieCriado&&onDossieCriado({paciente:pacienteEntrada,status:"aguardando_recepcao",resumoEntrada:resumo,documentos});
+    }catch(e){
+      console.error("[PrimeiraConsulta] Falha ao criar dossiê provisório",e);
+    }
+    clearTimeout(destravarEnvio);
+    setEnviando(false);
+    setPasso(4);
+
+    // IA é complementar: nunca deve travar o envio do paciente para a recepção.
+    setTimeout(async()=>{
+      try{
+        const iaResumo=await comTimeout(IA_resumirDados({
+          local_cancer:form.local_cancer,queixa:form.queixa,sintomas:sintomasTexto(),antecedentes:form.antec,
+          meds:form.meds,alerg:form.alerg,cirurgia:form.anam_cirurgia,
+          vacinas:form.vacinas,hf:form.anam_hist_fam,
+        },{nome:form.nome,nasc:form.nasc,idade:form.idade,cidade:form.cidade,cpf:form.cpf,tel:form.tel,sexo:form.sexo}),8000,"");
+        if(iaResumo&&!iaResumo.startsWith("âš")){
+          up&&up("obs_ia",iaResumo);
+          const camposIA=extrairCamposIA(iaResumo);
+          Object.entries(camposIA).forEach(([k,v])=>{if(v&&!pacienteEntrada[k]){pacienteEntrada[k]=v;up&&up(k,v);}});
+        }
+      }catch(_){}
+    },0);
+    return;
     let resumoFinal=resumo;
     try{
-      const iaResumo=await IA_resumirDados({
+      const iaResumo=await comTimeout(IA_resumirDados({
         local_cancer:form.local_cancer,queixa:form.queixa,sintomas:sintomasTexto(),antecedentes:form.antec,
         meds:form.meds,alerg:form.alerg,cirurgia:form.anam_cirurgia,
         vacinas:form.vacinas,hf:form.anam_hist_fam,
-      },{nome:form.nome,nasc:form.nasc,idade:form.idade,cidade:form.cidade,cpf:form.cpf,tel:form.tel,sexo:form.sexo});
+      },{nome:form.nome,nasc:form.nasc,idade:form.idade,cidade:form.cidade,cpf:form.cpf,tel:form.tel,sexo:form.sexo}),8000,"");
       if(iaResumo&&!iaResumo.startsWith("⚠")){
         resumoFinal=resumo+"\n\nRESUMO IA\n"+iaResumo;
         up&&up("obs_ia",iaResumo);
@@ -231,11 +290,13 @@ function PrimConsultaPaciente({pac,up,addMsg,addCaixa,addFila,onDossieCriado,onC
         });
       }
     }catch(_){}
-    onDossieCriado&&onDossieCriado({paciente:pacienteEntrada,status:"aguardando_recepcao",resumoEntrada:resumoFinal,documentos});
-    addCaixa&&addCaixa({de:form.nome||"Paciente",titulo:"Primeira Consulta — "+(form.nome||"—"),conteudo:resumoFinal,tipo:"primeira_consulta"});
-    addMsg&&addMsg("Paciente","Recepção","Primeira consulta enviada: "+(form.nome||"—")+". Dossiê aguardando conferência.","msg");
-    addMsg&&addMsg("Paciente","Médico","Nova pré-consulta: "+(form.nome||"—")+". Aguardando recepção.","standby");
-    if(addFila&&form.nome)addFila({nome:form.nome,proto:"Primeira consulta",chegada:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),status:"aguardando",origem:"paciente",pacID:pac?.pacID});
+    try{
+      onDossieCriado&&onDossieCriado({paciente:pacienteEntrada,status:"aguardando_recepcao",resumoEntrada:resumoFinal,documentos});
+    }catch(e){
+      console.error("[PrimeiraConsulta] Falha ao criar dossiê provisório",e);
+      alert("A recepção foi sinalizada, mas houve falha ao montar o dossiê provisório. A recepção deve conferir a fila.");
+    }
+    clearTimeout(destravarEnvio);
     setEnviando(false);
     setPasso(4);
   };
@@ -295,63 +356,83 @@ function PrimConsultaPaciente({pac,up,addMsg,addCaixa,addFila,onDossieCriado,onC
         {passo===0&&<div style={sc_.card({padding:18})}>
           <H2 ch="👤 Dados demográficos" s={{fontSize:18}}/>
           <p style={{margin:"-4px 0 14px",color:"#64748B",fontSize:13}}>Preencha o núcleo APAC/PB. A recepção revisa e o agente leva para prontuário e APAC.</p>
+
+          {/* Colar dados */}
           <div style={{border:"1.5px dashed "+T,borderRadius:12,background:"#F0F9FF",padding:12,marginBottom:14}}>
             <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",marginBottom:8}}>
               <div>
-                <div style={{fontSize:12,color:T,fontWeight:950,textTransform:"uppercase"}}>Teste: colar dados</div>
+                <div style={{fontSize:12,color:T,fontWeight:950,textTransform:"uppercase"}}>Colar dados</div>
                 <div style={{fontSize:11,color:"#64748B"}}>Cole identificação, contato e endereço. O app distribui nos campos abaixo.</div>
               </div>
               <button type="button" onClick={aplicarCadastroTeste} style={{background:T,color:"#fff",border:"none",borderRadius:9,padding:"8px 12px",fontWeight:900,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Preencher campos</button>
             </div>
             <textarea value={textoCadastroTeste} onChange={e=>setTextoCadastroTeste(e.target.value)} rows={5}
-              placeholder={"Exemplo:\n* **Nome completo:** Hagamenon Barboza da Silva.\n* **Data de nascimento:** 01/01/1951.\n* **Idade:** 75 anos.\n* **CPF:** 478.440.004-49.\n* **Cartão Nacional de Saúde (CNS):** 702809628289962.\n* **Filiação (Mãe):** Antonia Maria da Conceição.\n* **Sexo:** Masculino.\n* **Raça/Cor:** Parda.\n* **Nacionalidade:** Brasileira.\n* **Naturalidade:** Nova Olinda - PB.\n* **Endereço:** Rua Jose Teotonio, número 786, Pedra Branca - PB.\n* **Telefone:** (83) 9942-0675."}
+              placeholder={"Exemplo:\n* **Nome completo:** Katiana Bezerra da Silva.\n* **Data de nascimento:** 15/03/1978.\n* **CPF:** 123.456.789-00.\n* **CNS:** 702809628289962.\n* **Mãe:** Maria José Bezerra.\n* **Pai:** João Bezerra.\n* **Sexo:** Feminino.\n* **Naturalidade:** Patos - PB.\n* **Endereço:** Rua das Flores, número 123, Bairro Centro, Patos - PB, CEP 58700-000.\n* **Telefone:** (83) 99999-9999."}
               style={{...sc_.inp,resize:"vertical",fontSize:13,background:"#fff",fontFamily:"Segoe UI, Arial, sans-serif"}}/>
           </div>
-          <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:.6,margin:"2px 0 8px"}}>Identificação do paciente</div>
+
+          {/* Identificação */}
+          <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:.6,margin:"2px 0 8px"}}>Identificação</div>
+          <CampoCadastro form={form} setCampo={setCampo} l="Nome completo *" k="nome" ph="Nome completo"/>
           <CampoLinhaCadastro>
-            <CampoCadastro form={form} setCampo={setCampo} l="Nome completo *" k="nome" ph="Nome completo"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Nome social / apelido" k="nome_social" ph="Se houver"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Número do prontuário" k="prontuario" ph="Se já existir"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="CNS / Cartão SUS *" k="cns" ph="15 dígitos"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="CPF *" k="cpf" ph="000.000.000-00"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="RG / documento" k="rg" ph="Opcional"/>
             <CampoCadastro form={form} setCampo={setCampo} l="Data de nascimento *" k="nasc" ph="DD/MM/AAAA"/>
+            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+              <label style={{fontSize:12,fontWeight:800,color:N}}>Idade</label>
+              <div style={{...sc_.inp,background:"#F1F5F9",color:"#64748B",cursor:"default",display:"flex",alignItems:"center"}}>
+                {(()=>{
+                  const raw=String(form.nasc||"").replace(/\D/g,"/").replace(/(\d{2})(\d{2})(\d{4})/,"$1/$2/$3");
+                  const p=raw.split("/");
+                  if(p.length===3&&p[2].length===4){
+                    const d=new Date(+p[2],+p[1]-1,+p[0]);
+                    const hoje=new Date();
+                    let a=hoje.getFullYear()-d.getFullYear();
+                    if(hoje.getMonth()<d.getMonth()||(hoje.getMonth()===d.getMonth()&&hoje.getDate()<d.getDate()))a--;
+                    if(a>=0&&a<130)return a+" anos";
+                  }
+                  return "—";
+                })()}
+              </div>
+            </div>
             <CampoCadastro form={form} setCampo={setCampo} l="Sexo *" k="sexo" ph="Masculino / Feminino"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Raça/Cor *" k="raca_cor" ph="Parda, branca, preta..."/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Etnia, se aplicável" k="etnia" ph="Opcional"/>
           </CampoLinhaCadastro>
-          <CampoCadastro form={form} setCampo={setCampo} l="Nome da mãe *" k="mae" ph="Nome completo da mãe"/>
 
-          <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:.6,margin:"10px 0 8px"}}>Responsável / acompanhante</div>
+          {/* Naturalidade */}
+          <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:.6,margin:"10px 0 8px"}}>Naturalidade</div>
+          <CampoCadastro form={form} setCampo={setCampo} l="Cidade onde nasceu" k="naturalidade" ph="Cidade - UF onde nasceu"/>
+
+          {/* Filiação */}
+          <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:.6,margin:"10px 0 8px"}}>Filiação</div>
           <CampoLinhaCadastro>
-            <CampoCadastro form={form} setCampo={setCampo} l="Nome do acompanhante" k="acompanhante_nome" ph="Quem veio com o paciente"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Nome do responsável" k="responsavel_nome" ph="Se houver"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Parentesco do responsável" k="responsavel_parentesco" ph="Filho(a), cônjuge..."/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Telefone do responsável" k="responsavel_telefone" ph="(83) 99999-9999"/>
+            <CampoCadastro form={form} setCampo={setCampo} l="Nome do pai" k="pai" ph="Nome completo do pai"/>
+            <CampoCadastro form={form} setCampo={setCampo} l="Nome da mãe *" k="mae" ph="Nome completo da mãe"/>
           </CampoLinhaCadastro>
 
-          <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:.6,margin:"10px 0 8px"}}>Contatos telefônicos</div>
+          {/* Documentos */}
+          <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:.6,margin:"10px 0 8px"}}>Documentos</div>
           <CampoLinhaCadastro>
-            <CampoCadastro form={form} setCampo={setCampo} l="Telefone principal do paciente *" k="tel" ph="(83) 99999-9999"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Telefone celular / WhatsApp" k="telefone_celular" ph="(83) 99999-9999"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Telefone alternativo" k="telefone_alternativo" ph="Opcional"/>
+            <CampoCadastro form={form} setCampo={setCampo} l="RG / documento" k="rg" ph="Opcional"/>
+            <CampoCadastro form={form} setCampo={setCampo} l="CPF *" k="cpf" ph="000.000.000-00"/>
+            <CampoCadastro form={form} setCampo={setCampo} l="Cartão SUS *" k="cns" ph="15 dígitos"/>
           </CampoLinhaCadastro>
 
+          {/* Endereço residencial */}
           <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:.6,margin:"10px 0 8px"}}>Endereço residencial</div>
           <CampoLinhaCadastro>
-            <CampoCadastro form={form} setCampo={setCampo} l="CEP *" k="cep" ph="58700-000"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Tipo de logradouro" k="tipo_logradouro" ph="Rua, avenida, sítio..."/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Logradouro *" k="logradouro" ph="Nome da rua/sítio/fazenda"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Número ou S/N *" k="numero" ph="S/N"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Complemento" k="complemento" ph="Casa, apto..."/>
+            <CampoCadastro form={form} setCampo={setCampo} l="Endereço *" k="logradouro" ph="Rua, sítio, fazenda..."/>
+            <CampoCadastro form={form} setCampo={setCampo} l="Número *" k="numero" ph="S/N"/>
             <CampoCadastro form={form} setCampo={setCampo} l="Bairro *" k="bairro" ph="Bairro"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Cidade onde mora atualmente *" k="cidade" ph="Município de residência"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Código IBGE do município" k="municipio_cod" ph="Opcional; recepção completa se faltar"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="UF *" k="uf" ph="PB"/>
-            <CampoCadastro form={form} setCampo={setCampo} l="Zona urbana/rural" k="zona" ph="Urbana ou rural"/>
           </CampoLinhaCadastro>
-          <CampoCadastro form={form} setCampo={setCampo} l="Endereço completo" k="endereco" ph="Rua, número, bairro, cidade, UF, CEP"/>
-          {camposPendentesAPAC.length>0&&<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:12,padding:"10px 12px",marginTop:8}}>
+          <CampoLinhaCadastro>
+            <CampoCadastro form={form} setCampo={setCampo} l="Cidade *" k="cidade" ph="Município de residência"/>
+            <CampoCadastro form={form} setCampo={setCampo} l="UF" k="uf" ph="PB"/>
+            <CampoCadastro form={form} setCampo={setCampo} l="CEP *" k="cep" ph="58700-000"/>
+          </CampoLinhaCadastro>
+
+          {/* Contato */}
+          <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:.6,margin:"10px 0 8px"}}>Contato</div>
+          <CampoCadastro form={form} setCampo={setCampo} l="Telefone de contato *" k="tel" ph="(83) 99999-9999"/>
+
+          {camposPendentesAPAC.length>0&&<div style={{background:"#FFFBEB",border:"1.5px solid #FCD34D",borderRadius:12,padding:"10px 12px",marginTop:14}}>
             <div style={{fontSize:12,fontWeight:900,color:AM,marginBottom:5}}>Pendências para a recepção completar na APAC</div>
             <div style={{fontSize:11,color:"#78350F",marginBottom:6}}>Essas pendências não bloqueiam a progressão do paciente.</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px 10px"}}>
@@ -378,7 +459,7 @@ function PrimConsultaPaciente({pac,up,addMsg,addCaixa,addFila,onDossieCriado,onC
           </div>}
 
           {/* Queixa principal */}
-          <CampoCadastro form={form} setCampo={setCampo} l="Motivo principal da consulta" k="queixa" ph="Conte em poucas palavras o principal problema." ta rows={3}/>
+          <CampoCadastro form={form} setCampo={setCampo} l="O que você está sentindo? Quais sintomas?" k="queixa" ph="Descreva o que está sentindo, dores, caroços, cansaço, perda de peso..." ta rows={3}/>
 
           {/* Sintomas */}
           <div style={{fontSize:11,color:N,fontWeight:900,textTransform:"uppercase",margin:"14px 0 8px",letterSpacing:.5}}>Marque os sintomas que você percebeu</div>

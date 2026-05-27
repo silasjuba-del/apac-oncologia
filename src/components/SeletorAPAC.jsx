@@ -160,6 +160,136 @@ export const SIGTAP = {
       },
     ]
   },
+  "OVARIO_ENDOMETRIO": {
+    label: "Ovário / Endométrio",
+    procedimentos: [
+      {
+        codigo: "03.04.02.070-5", descricao: "QT — Carboplatina + Paclitaxel",
+        indicacao: "Carcinoma seroso de ovário / endométrio avançado ou recidivado", linha: "1ª linha / recidiva sensível",
+        associados: []
+      },
+      {
+        codigo: "03.04.02.071-3", descricao: "QT — Paclitaxel semanal",
+        indicacao: "Neoplasia ginecológica recidivada ou paliativa", linha: "Linha subsequente",
+        associados: []
+      },
+    ]
+  },
+  "PANCREAS_BILIAR": {
+    label: "Pâncreas / Vias biliares",
+    procedimentos: [
+      {
+        codigo: "03.04.02.072-1", descricao: "QT — Gemcitabina",
+        indicacao: "Adenocarcinoma de pâncreas localmente avançado/metastático", linha: "Paliativo",
+        associados: []
+      },
+      {
+        codigo: "03.04.02.073-0", descricao: "QT — Gemcitabina + Cisplatina",
+        indicacao: "Colangiocarcinoma / vias biliares avançado", linha: "1ª linha paliativa",
+        associados: []
+      },
+    ]
+  },
+  "RIM": {
+    label: "Rim",
+    procedimentos: [
+      {
+        codigo: "03.04.03.010-9", descricao: "Terapia alvo — TKI anti-VEGF",
+        indicacao: "Carcinoma de células renais avançado", linha: "1ª/2ª linha conforme elegibilidade",
+        associados: ["ZOLENDRONICO_60"]
+      },
+    ]
+  },
+  "BEXIGA": {
+    label: "Bexiga / Urotelial",
+    procedimentos: [
+      {
+        codigo: "03.04.02.074-8", descricao: "QT — Gemcitabina + Cisplatina",
+        indicacao: "Carcinoma urotelial avançado, paciente elegível à cisplatina", linha: "1ª linha",
+        associados: []
+      },
+      {
+        codigo: "03.04.02.075-6", descricao: "QT — Gemcitabina + Carboplatina",
+        indicacao: "Carcinoma urotelial avançado, paciente inelegível à cisplatina", linha: "1ª linha",
+        associados: []
+      },
+    ]
+  },
+  "MELANOMA": {
+    label: "Melanoma",
+    procedimentos: [
+      {
+        codigo: "03.04.02.076-4", descricao: "QT — Dacarbazina",
+        indicacao: "Melanoma metastático quando indicado tratamento sistêmico convencional", linha: "Paliativo",
+        associados: []
+      },
+      {
+        codigo: "03.04.03.011-7", descricao: "Terapia sistêmica — Imunoterapia / alvo molecular",
+        indicacao: "Melanoma avançado com critério de elegibilidade documentado", linha: "Conforme biomarcador e acesso",
+        associados: []
+      },
+    ]
+  },
+  "LINFOMAS": {
+    label: "Linfomas",
+    procedimentos: [
+      {
+        codigo: "03.04.02.077-2", descricao: "QT — R-CHOP / CHOP",
+        indicacao: "Linfoma não Hodgkin agressivo", linha: "1ª linha",
+        associados: []
+      },
+      {
+        codigo: "03.04.02.078-0", descricao: "QT — ABVD",
+        indicacao: "Linfoma de Hodgkin", linha: "1ª linha",
+        associados: []
+      },
+    ]
+  },
+  "CABECA_PESCOCO": {
+    label: "Cabeça e pescoço",
+    procedimentos: [
+      {
+        codigo: "03.04.02.079-9", descricao: "QT-RT — Cisplatina concomitante",
+        indicacao: "CEC de cabeça e pescoço localmente avançado", linha: "Concomitante à radioterapia",
+        associados: []
+      },
+      {
+        codigo: "03.04.02.080-2", descricao: "QT — Platina + 5-FU / Taxano",
+        indicacao: "CEC de cabeça e pescoço recidivado/metastático", linha: "Paliativo",
+        associados: []
+      },
+    ]
+  },
+  "TIREOIDE": {
+    label: "Tireoide",
+    procedimentos: [
+      {
+        codigo: "03.04.03.012-5", descricao: "Terapia alvo — TKI",
+        indicacao: "Carcinoma diferenciado de tireoide refratário ao radioiodo", linha: "Doença progressiva",
+        associados: []
+      },
+    ]
+  },
+  "SNC": {
+    label: "Sistema nervoso central",
+    procedimentos: [
+      {
+        codigo: "03.04.02.081-0", descricao: "QT — Temozolomida",
+        indicacao: "Glioma de alto grau conforme histologia e protocolo", linha: "Concomitante/adjuvante ou recidiva",
+        associados: []
+      },
+    ]
+  },
+  "SARCOMAS": {
+    label: "Sarcomas",
+    procedimentos: [
+      {
+        codigo: "03.04.02.082-9", descricao: "QT — Doxorrubicina / Ifosfamida",
+        indicacao: "Sarcoma de partes moles ou ósseo conforme subtipo", linha: "Neoadjuvante/adjuvante/paliativo",
+        associados: []
+      },
+    ]
+  },
   "SUPORTE_OSSEO": {
     label: "Suporte Ósseo (associado)",
     procedimentos: [

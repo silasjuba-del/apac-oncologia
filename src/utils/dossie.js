@@ -102,6 +102,7 @@ function gerarTextoEvolucao(dossie){
     linha("Cirurgias prévias",campo(p.anam_cirurgia,["cirurgias","cirurgias prévias","cirurgias previas","cirúrgicos","cirurgicos"])),
     linha("Calendário vacinal",campo(p.vacinas,["vacinação","vacinacao","calendário vacinal","calendario vacinal"])),
     linha("Histórico familiar",campo(p.anam_hist_fam,["histórico familiar","historico familiar","história familiar","historia familiar"])),
+    // F5: Exame Físico preservado no texto-base para impressão/exportação
     linha("Exame físico",p.exFisico),
     "",
     tituloOnco,
@@ -116,14 +117,20 @@ function gerarTextoEvolucao(dossie){
     "",
     "LAUDOS EM CRONOLOGIA",
     ...(exLinhas.length?exLinhas.map(l=>"• "+primeiraMaiuscula(l)):[""]),
+    // F5: Laboratório dedicado
+    v(p.labs_txt)&&("LABORATÓRIO\n"+p.labs_txt),
     "",
+    // F5: Conduta como painel dedicado (preenchido pelo médico)
     "CONDUTA",
+    v(p.conduta)||"",
     "",
-    "",
+    // F5: Observações com field de trials
     "OBSERVAÇÕES",
-    "Pendências: "+(pendencias.length?pendencias.join("; "):""),
+    v(p.obs_medico)||("Pendências: "+(pendencias.length?pendencias.join("; "):"")),
+    v(p.obs_medico)&&("Pendências: "+(pendencias.length?pendencias.join("; "):"")),
     "Sugestões: "+(sugestoes.length?sugestoes.join("; "):""),
-  ].join("\n"));
+    v(p.trial_info)&&("Ensaio clínico / Trial: "+p.trial_info),
+  ].filter(x=>x!==false&&x!==null&&x!==undefined).join("\n"));
 }
 function validarAPAC(dossie){
   const p=dossie?.paciente||{};
@@ -243,6 +250,8 @@ function autoPreencherCamposLaudos(pac,up){
   }
 }
 function agenteResumoClinico(dossie){
+  const textoPadrao=gerarTextoEvolucao(dossie);
+  if(String(textoPadrao||"").trim())return textoPadrao;
   const p=dossie?.paciente||{};
   const exames=coletarExamesRealizados(dossie,p).map(formatarLinhaExameRealizado);
   const cid=p.cid||p.cid_sugerido||getCIDPorSede(p.local_cancer)?.cid||getCID(p.diag)||"—";

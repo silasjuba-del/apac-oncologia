@@ -90,6 +90,24 @@ describe('openEncounter / getActiveEncounter', () => {
     expect(retrieved.status).toBe(ENCOUNTER_STATUS.OPEN);
   });
 
+  it('openEncounter retorna { ok: true } em caso de sucesso (F4.5)', () => {
+    const enc = makeEncounter();
+    const result = openEncounter(enc);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('openEncounter retorna { ok: false, reason } quando localStorage falha (F4.5)', () => {
+    const failMock = {
+      ...localStorageMock,
+      setItem: () => { throw new Error('QuotaExceededError'); },
+    };
+    vi.stubGlobal('localStorage', failMock);
+    const result = openEncounter(makeEncounter());
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/armazenamento local/i);
+    vi.stubGlobal('localStorage', localStorageMock); // restaura
+  });
+
   it('retorna null para encounter com status CLOSED', () => {
     const enc = { ...makeEncounter(), status: ENCOUNTER_STATUS.CLOSED };
     openEncounter(enc);

@@ -16,10 +16,26 @@ export function _getApiKey(){
 
 export function _apiUrl(){const u=import.meta.env.VITE_API_URL||"http://127.0.0.1:3001";return u==="/"?"":u.replace(/\/$/,"");}
 
+/**
+ * _backendHeaders — cabeçalhos padrão para chamadas ao backend clínico.
+ * Inclui x-clinic-key (P0-Security) quando VITE_CLINIC_API_KEY estiver definida.
+ * Define também em .env: VITE_CLINIC_API_KEY=<mesma que CLINIC_API_KEY no server/.env>
+ */
+export function _clinicKeyHeaders(extra={}){
+  const h={...extra};
+  const key=import.meta.env.VITE_CLINIC_API_KEY||window.__CLINIC_KEY__||"";
+  if(key)h["x-clinic-key"]=key;
+  return h;
+}
+
+export function _backendHeaders(extra={}){
+  return _clinicKeyHeaders({"Content-Type":"application/json",...extra});
+}
+
 export async function chamarClaude(prompt,maxTokens=1200){
   let backendMsg="";
   try{
-    const r=await fetch(_apiUrl()+"/api/claude/resumo",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt,maxTokens})});
+    const r=await fetch(_apiUrl()+"/api/claude/resumo",{method:"POST",headers:_backendHeaders(),body:JSON.stringify({prompt,maxTokens})});
     const d=await r.json().catch(()=>({}));
     if(r.ok&&d.ok)return d.text||"";
     backendMsg=d.message||("HTTP "+r.status);

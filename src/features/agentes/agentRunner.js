@@ -11,6 +11,7 @@
 
 import { AGENTES } from '../AgentesPipeline.jsx';
 import { TIPO_AGENTE_LOCAL, TIPO_AGENTE_IA } from '../oncoProUtils.js';
+import { requireEncounter } from '../../utils/clinicalStore';
 
 /**
  * Executa os agentes LOCAIS (não IA) em sequência com acumulador local.
@@ -66,6 +67,15 @@ export async function executarAgentesIA({
   }
   if (typeof chamarClaude !== 'function') {
     return { acumulado: pac, estados: {}, motivo: 'sem_chamarClaude' };
+  }
+
+  // F0 gate — agentes IA clínicos requerem encounter aberto.
+  // Sem isso, dados gerados pela IA não têm encounterId e não podem
+  // ser salvos via saveClinicalArtifact (bloqueado sem encounter).
+  const encCheck = requireEncounter(pac);
+  if (!encCheck.ok) {
+    console.warn('[agentRunner] Pipeline IA bloqueado — sem encounter ativo:', encCheck.reason);
+    return { acumulado: pac, estados: {}, motivo: 'sem_encounter', reason: encCheck.reason };
   }
 
   let acumulado = { ...(pac || {}), ...contextoAgentes };

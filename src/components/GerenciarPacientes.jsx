@@ -138,8 +138,8 @@ export default function GerenciarPacientes({ onAbrirPaciente, onNovoPaciente }) 
         </div>
       )}
 
-      {filtrados.map(p => (
-        <div key={p.pacID} style={cardStyle}
+      {filtrados.map((p, i) => (
+        <div key={`${p.pacID || p.cpf || p.cns || p.nome || "pac"}-${i}`} style={cardStyle}
           onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(15,23,42,.1)"}
           onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
           onClick={() => abrirPaciente(p)}

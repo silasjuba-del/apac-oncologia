@@ -6,7 +6,7 @@ import React, { useState, useRef } from "react";
 import { N, T, G, VE } from "../../utils/constants";
 import { abrirDrive } from "../../utils/constants";
 import { sc_, Btn, ResumoBullets, copiarTexto } from "../../components/ui/primitives";
-import { _apiUrl, chamarGPT } from "../../utils/api";
+import { _apiUrl, _backendHeaders, chamarGPT } from "../../utils/api";
 import { executarProntuarioSecurity } from "../../utils/security";
 
 export default function UploadComIA({pac,up,addMsg,destino="prontuario",origem="Médico",onConcluido}){
@@ -44,7 +44,7 @@ export default function UploadComIA({pac,up,addMsg,destino="prontuario",origem="
     setLoading(true);
     try{
       const nome=nomeArquivoLocal(caminhoLocal);
-      const r=await fetch(_apiUrl()+"/api/dossie/ler-local",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({paciente_id:Number(pac?.id||pac?.paciente_id)||null,paciente:pac||{},recepcao:{},caminho:caminhoLocal.trim(),tipo:tipoPorNome(nome),data:new Date().toISOString().slice(0,10)})});
+      const r=await fetch(_apiUrl()+"/api/dossie/ler-local",{method:"POST",headers:_backendHeaders(),body:JSON.stringify({paciente_id:Number(pac?.id||pac?.paciente_id)||null,paciente:pac||{},recepcao:{},caminho:caminhoLocal.trim(),tipo:tipoPorNome(nome),data:new Date().toISOString().slice(0,10)})});
       const d=await r.json().catch(()=>({}));
       if(!r.ok||!d.ok)throw new Error(d.message||("HTTP "+r.status));
       registrarResultado(d.text||d.resumo||d.resumoLaudo||"",{arquivos:[{n:nome,tipo:"Caminho local",caminho:caminhoLocal}],texto:"",destino,origem,tipo:"Caminho local"});
@@ -101,7 +101,7 @@ Texto colado:
 ${abaUp==="colar"?txtColar:""}`;
     let res="";
     try{
-      const r=await fetch(_apiUrl()+"/api/claude/resumo",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt,maxTokens:1200,files:filesPayload})});
+      const r=await fetch(_apiUrl()+"/api/claude/resumo",{method:"POST",headers:_backendHeaders(),body:JSON.stringify({prompt,maxTokens:1200,files:filesPayload})});
       const d=await r.json().catch(()=>({}));
       if(r.ok&&d.ok)res=d.text||"";
       else res="⚠ "+(d.message||("Falha ao ler PDF no backend: HTTP "+r.status));

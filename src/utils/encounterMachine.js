@@ -278,6 +278,16 @@ export function identityMatches(snapshot, pac = {}) {
   const snapshotId = String(snapshot.patientId || '');
   const pacId      = String(pac?.pacID || pac?.cpf || pac?.cns || '');
 
+  // Falha FECHADO: se o artefato tem identidade registrada mas o paciente ativo
+  // não tem nenhum identificador, a comparação é impossível → bloquear.
+  // Segurança clínica: dúvida de identidade = bloqueio, não passagem.
+  if (snapshotId && !pacId) {
+    return {
+      ok:     false,
+      motivo: 'Paciente ativo sem identificação — não é possível verificar compatibilidade com o artefato.',
+    };
+  }
+
   if (snapshotId && pacId && snapshotId !== pacId) {
     return {
       ok:     false,

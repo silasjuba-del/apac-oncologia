@@ -10,8 +10,12 @@ import { fileURLToPath } from "url";
 
 import db, { getPacienteCompleto, buscarPacientes, validarAPAC } from "./db.js";
 import { responderClaude, preencherAPAC, gerarDossie, gerarDossieComArquivos }  from "./services/claudeService.js";
-import dossieRouter       from "./routes/dossie.js";
-import oncoAgentRouter    from "./routes/oncoagent.js";
+import dossieRouter                       from "./routes/dossie.js";
+import oncoAgentRouter                    from "./routes/oncoagent.js";
+import { clinicAuth }                     from "./middleware/auth.js";
+import { patientGuard, evolucaoGuard }    from "./middleware/patientGuard.js";
+import { auditClinicalRoute }             from "./middleware/audit.js";
+import { rateLimitClinical }              from "./middleware/rateLimit.js";
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,12 +23,50 @@ dotenv.config({ path: path.join(__dirname, ".env"), override: true });
 const app       = express();
 const PORT      = process.env.PORT || 3001;
 
-app.use(cors());
-app.use(express.json({ limit:"60mb" }));
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+// ── P0-Security: CORS fail-closed ────────────────────────────────────────────
+// Em produção: defina ALLOWED_ORIGINS=https://seu-dominio.com no .env
+// Em dev: aceita localhost nas portas padrão do Vite e do Express
+const _allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : process.env.NODE_ENV === 'production'
+    ? []
+    : [
+      'http://localhost:5177', 'http://localhost:5178', 'http://localhost:5179',
+      'http://localhost:3001', 'http://127.0.0.1:3001',
+      'http://127.0.0.1:5177', 'http://127.0.0.1:5178',
+    ];
+
+app.use(cors({
+  origin(origin, cb) {
+    // Requisições sem Origin (same-origin, mobile nativo) passam em dev; bloqueiam em prod
+    if (!origin) {
+      const isProd = process.env.NODE_ENV === 'production';
+      return cb(isProd ? new Error('CORS: Origin ausente bloqueada em produção') : null, !isProd);
+    }
+    if (_allowedOrigins.includes(origin)) return cb(null, true);
+    console.warn(`[CORS] Origem bloqueada: ${origin}`);
+    cb(new Error(`CORS: Origem não autorizada — ${origin}`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-clinic-key', 'Authorization'],
+  credentials: false,
+}));
+app.use(rateLimitClinical);
+
+// ── P0-Security: body limit global 1 MB ──────────────────────────────────────
+// Rotas com PDF/imagem em base64 pulam o parser global e aplicam parser próprio
+// depois do clinicAuth. Sem esse skip, o limite global bloquearia uploads válidos.
+const _json1mb = express.json({ limit: '1mb' });
+const _largeJsonRoutes = new Set(['/api/claude/resumo', '/api/dossie/drive']);
+app.use((req, res, next) => {
+  if (_largeJsonRoutes.has(req.path)) return next();
+  return _json1mb(req, res, next);
+});
+app.use(auditClinicalRoute);
+// Laudos temporarios ficam em /uploads, mas nao devem ser servidos publicamente.
 
 // ── Rotas OncoAgent ───────────────────────────────────────────
-app.use("/api/oncoagent", oncoAgentRouter);
+app.use("/api/oncoagent", clinicAuth, oncoAgentRouter);
 
 // Serve o frontend buildado pelo Vite (sempre, sem depender de NODE_ENV)
 const distDir = path.join(__dirname, "../dist");
@@ -121,22 +163,28 @@ function prontuarioSecurityServer(paciente, texto) {
 }
 
 // ── Rotas dossiê (upload direto + Claude) ─────────────────────
-app.use("/api/dossie", dossieRouter);
+app.use("/api/dossie", clinicAuth, dossieRouter);
 
-// ── Claude: texto + PDF/imagem em base64
-app.post("/api/claude/resumo", async (req,res) => {
-  try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({ ok:false, code:"ANTHROPIC_API_KEY_MISSING", message:"ANTHROPIC_API_KEY não configurada no backend. O PDF foi anexado, mas ainda não pode ser lido pela IA." });
+// ── Claude: texto + PDF/imagem em base64 ─────────────────────────────────────
+// Limite aumentado para esta rota específica — arquivos PDF/imagem em base64 chegam
+// a ~8 MB cada. Autenticação via clinicAuth antes do body parser maior.
+app.post("/api/claude/resumo",
+  clinicAuth,
+  express.json({ limit: '15mb' }),   // sobrescreve o global 1mb apenas aqui
+  async (req,res) => {
+    try {
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return res.status(503).json({ ok:false, code:"ANTHROPIC_API_KEY_MISSING", message:"ANTHROPIC_API_KEY não configurada no backend. O PDF foi anexado, mas ainda não pode ser lido pela IA." });
+      }
+      const { prompt="", maxTokens=1200, files=[] } = req.body || {};
+      const text = await responderClaude({ prompt, maxTokens, files });
+      res.json({ ok:true, text, filesRead:(files||[]).length });
+    } catch(e) {
+      console.error("[/api/claude/resumo]", e.message);
+      res.status(500).json({ ok:false, message:"Erro ao processar resumo no backend." });
     }
-    const { prompt="", maxTokens=1200, files=[] } = req.body || {};
-    const text = await responderClaude({ prompt, maxTokens, files });
-    res.json({ ok:true, text, filesRead:(files||[]).length });
-  } catch(e) {
-    console.error("[/api/claude/resumo]", e.message);
-    res.status(500).json({ ok:false, message:e.message });
   }
-});
+);
 
 // ── Health ────────────────────────────────────────────────────
 
@@ -271,12 +319,12 @@ async function baixarDriveComoClaudeFiles(files = [], { maxFiles = 3, maxTotalBy
     const fileSize = parseInt(f.size || "0");
     // Pular arquivos > 6MB (base64 seria ~8MB, poderia estourar limite Claude)
     if (fileSize > 6 * 1024 * 1024) {
-      console.log(`[Drive] Ignorando ${f.name} (${Math.round(fileSize/1024)}KB — muito grande)`);
+      console.log(`[Drive] Ignorando arquivo grande (${Math.round(fileSize/1024)}KB)`);
       continue;
     }
     // Verificar limite total acumulado
     if (totalBytes + fileSize * 1.4 > maxTotalBytes) {
-      console.log(`[Drive] Limite total atingido ao processar ${f.name}`);
+      console.log("[Drive] Limite total atingido ao processar arquivos selecionados");
       break;
     }
     try {
@@ -287,21 +335,22 @@ async function baixarDriveComoClaudeFiles(files = [], { maxFiles = 3, maxTotalBy
       const b64 = Buffer.from(res.data).toString("base64");
       totalBytes += b64.length;
       out.push({ name: f.name, mimeType, base64: b64 });
-      console.log(`[Drive] Baixado: ${f.name} (${Math.round(b64.length/1024)}KB b64)`);
+      console.log(`[Drive] Arquivo baixado (${Math.round(b64.length/1024)}KB b64)`);
     } catch(e) {
-      console.warn(`[Drive] Falha ao baixar ${f.name}: ${e.message}`);
+      console.warn(`[Drive] Falha ao baixar arquivo selecionado: ${e.message}`);
     }
   }
   return out;
 }
 
-app.get("/api/drive/health", (_req, res) => {
+app.get("/api/drive/health", clinicAuth, (_req, res) => {
   res.json({ ok:true, ...driveConfigStatus() });
 });
 
-app.get("/api/drive/search", async (req, res) => {
+// P1-Security: busca Drive — query via POST (nome/CPF não deve aparecer em URL)
+app.post("/api/drive/search", clinicAuth, express.json({ limit: '1mb' }), async (req, res) => {
   try {
-    const q = String(req.query.q || "").trim();
+    const q = String(req.body?.q || "").trim();
     if (!q) return res.status(400).json({ ok:false, message:"Informe nome, CPF, ID ou link da pasta Drive." });
     const status = driveConfigStatus();
     if (!status.configured) return res.json({ ok:true, ...status, folder:null, files:[] });
@@ -309,11 +358,14 @@ app.get("/api/drive/search", async (req, res) => {
     res.json({ ok:true, ...status, ...found });
   } catch (e) {
     console.error("[/api/drive/search]", e.message);
-    res.status(500).json({ ok:false, message:e.message });
+    res.status(500).json({ ok:false, message:"Erro ao buscar arquivos no Drive." });
   }
 });
 
-app.post("/api/dossie/drive", async (req, res) => {
+app.post("/api/dossie/drive",
+  clinicAuth,
+  express.json({ limit: '15mb' }),   // arquivos Drive em base64 podem ser grandes
+  async (req, res) => {
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(503).json({ ok:false, code:"ANTHROPIC_API_KEY_MISSING", message:"Claude não configurado no backend." });
@@ -355,9 +407,9 @@ app.post("/api/dossie/drive", async (req, res) => {
     res.json({ ok:true, ...status, folder, arquivos, resumo, filesRead:filesPayload.length });
   } catch (e) {
     console.error("[/api/dossie/drive]", e.message);
-    res.status(500).json({ ok:false, message:e.message });
+    res.status(500).json({ ok:false, message:"Erro ao gerar dossie a partir do Drive." });
   }
-});
+}); // fim /api/dossie/drive
 
 
 const FLUXO_ATENDIMENTO = [
@@ -488,7 +540,15 @@ const EVENTOS_FLUXO = {
 };
 
 function etapaFluxo(status) {
-  return FLUXO_ATENDIMENTO.find(x => x.id === status) || FLUXO_ATENDIMENTO[0];
+  const aliases = {
+    aguardando: "aguardando_recepcao",
+    em_atendimento: "em_consulta",
+    atendido: "apac_pronta",
+    concluido: "apac_pronta",
+    atendimento_concluido: "apac_pronta",
+  };
+  const id = aliases[status] || status;
+  return FLUXO_ATENDIMENTO.find(x => x.id === id) || FLUXO_ATENDIMENTO[0];
 }
 
 function proximaEtapaFluxo(status) {
@@ -522,7 +582,7 @@ function transicaoFluxo(status, evento) {
   };
 }
 
-app.get("/api/fluxo/rotas", (_req, res) => {
+app.get("/api/fluxo/rotas", clinicAuth, (_req, res) => {
   res.json({
     ok:true,
     nome:"Dossie Oncologico Inteligente",
@@ -532,16 +592,40 @@ app.get("/api/fluxo/rotas", (_req, res) => {
   });
 });
 
-app.get("/api/fluxo/status/:status", (req, res) => {
+app.get("/api/fluxo/status/:status", clinicAuth, (req, res) => {
   const etapa = etapaFluxo(req.params.status);
   res.json({ ok:true, etapa, proxima:proximaEtapaFluxo(etapa.id) });
 });
 
-app.post("/api/fluxo/proximo-passo", (req, res) => {
+app.get("/api/fluxo/paciente/:pacienteId", clinicAuth, patientGuard, (req, res) => {
+  const paciente = db.prepare("SELECT id,nome,status FROM pacientes WHERE id=?").get(req.resolvedPacienteId);
+  if (!paciente) return res.status(404).json({ ok:false, message:"Paciente não encontrado." });
+  const etapa = etapaFluxo(paciente.status);
+  res.set("Cache-Control", "no-store").json({
+    ok:true,
+    paciente_id:paciente.id,
+    status:paciente.status,
+    etapa,
+    proxima:proximaEtapaFluxo(etapa.id),
+  });
+});
+
+app.post("/api/fluxo/proximo-passo", clinicAuth, (req, res) => {
   const { status="pre_consulta", evento="" } = req.body || {};
+  const pacienteId = Number(req.body?.paciente_id || 0);
+  let statusBase = status;
+  if (pacienteId) {
+    const paciente = db.prepare("SELECT id,status FROM pacientes WHERE id=?").get(pacienteId);
+    if (!paciente) return res.status(404).json({ ok:false, message:"Paciente não encontrado." });
+    statusBase = paciente.status || status;
+  }
   const resultado = evento
-    ? transicaoFluxo(status, evento)
-    : { ok:true, statusAtual:etapaFluxo(status).id, etapaAtual:etapaFluxo(status), proximaSugerida:proximaEtapaFluxo(status) };
+    ? transicaoFluxo(statusBase, evento)
+    : { ok:true, statusAtual:etapaFluxo(statusBase).id, etapaAtual:etapaFluxo(statusBase), proximaSugerida:proximaEtapaFluxo(statusBase) };
+  if (resultado.ok && pacienteId && resultado.statusNovo) {
+    db.prepare("UPDATE pacientes SET status=? WHERE id=?").run(resultado.statusNovo, pacienteId);
+    resultado.paciente_id = pacienteId;
+  }
   res.status(resultado.ok ? 200 : 400).json(resultado);
 });
 
@@ -556,7 +640,7 @@ app.get("/api/health", (_req, res) => res.json({
 // ─────────────────────────────────────────────────────────────
 // PACIENTE
 // ─────────────────────────────────────────────────────────────
-app.post("/api/paciente/form", (req, res) => {
+app.post("/api/paciente/form", clinicAuth, (req, res) => {
   try {
     const d = req.body;
     if (!d.nome?.trim()) return res.status(400).json({ message:"Nome é obrigatório." });
@@ -599,26 +683,39 @@ app.post("/api/paciente/form", (req, res) => {
   }
 });
 
-app.get("/api/paciente/busca", (req, res) => {
-  try { res.json(buscarPacientes(req.query.q||"")); }
+// P1-Security: busca de paciente por nome/CPF/CNS — NÃO deve ir em URL (logs de proxy)
+// POST /api/paciente/busca — versão segura: query no body, não na URL
+app.post("/api/paciente/busca", clinicAuth, (req, res) => {
+  try { res.json(buscarPacientes(req.body?.q || "")); }
   catch(e) { res.status(500).json({ message:"Erro interno." }); }
 });
 
-app.get("/api/paciente/:id", (req, res) => {
+// GET mantido por compatibilidade retroativa — DEPRECADO
+// PHI (nome, CPF) NÃO deve aparecer em URL: vai para access logs e proxy logs.
+// Migrar frontend para POST /api/paciente/busca.
+app.get("/api/paciente/busca", clinicAuth, (req, res) => {
+  res.status(410).json({
+    ok:false,
+    code:"PATIENT_SEARCH_GET_DISABLED",
+    message:"Use POST /api/paciente/busca com body { q }. Busca por URL foi desativada para evitar PHI em logs.",
+  });
+});
+
+app.get("/api/paciente/:id", clinicAuth, patientGuard, (req, res) => {
   try {
-    const d = getPacienteCompleto(Number(req.params.id));
+    const d = getPacienteCompleto(req.resolvedPacienteId);
     if (!d) return res.status(404).json({ message:"Não encontrado." });
-    res.json(d);
+    res.set("Cache-Control", "no-store").json(d);
   } catch(e) { res.status(500).json({ message:"Erro interno." }); }
 });
 
 // ─────────────────────────────────────────────────────────────
 // RECEPÇÃO — só dados demográficos
 // ─────────────────────────────────────────────────────────────
-app.post("/api/recepcao/confirmar", (req, res) => {
+app.post("/api/recepcao/confirmar", clinicAuth, patientGuard, (req, res) => {
   try {
-    const { paciente_id, dados, drive_folder } = req.body;
-    if (!paciente_id) return res.status(400).json({ message:"paciente_id obrigatório." });
+    const { dados, drive_folder } = req.body;
+    const paciente_id = req.resolvedPacienteId;
 
     db.prepare(`
       UPDATE pacientes SET
@@ -626,7 +723,7 @@ app.post("/api/recepcao/confirmar", (req, res) => {
         data_nascimento=COALESCE(@data_nascimento,data_nascimento),
         cidade=COALESCE(@cidade,cidade), telefone=COALESCE(@telefone,telefone),
         nome_mae=COALESCE(@nome_mae,nome_mae), cns=COALESCE(@cns,cns),
-        status='em_atendimento'
+        status='recepcao_conferencia'
       WHERE id=@id
     `).run({ nome:null, cpf:null, data_nascimento:null, cidade:null, telefone:null, nome_mae:null, cns:null, ...(dados||{}), id:paciente_id });
 
@@ -662,7 +759,7 @@ app.post("/api/recepcao/confirmar", (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // MÉDICO
 // ─────────────────────────────────────────────────────────────
-app.get("/api/medico/lista", (req, res) => {
+app.get("/api/medico/lista", clinicAuth, (req, res) => {
   try {
     res.json(db.prepare(`
       SELECT p.id,p.nome,p.cidade,p.status,p.created_at,
@@ -671,16 +768,17 @@ app.get("/api/medico/lista", (req, res) => {
       FROM pacientes p
       LEFT JOIN recepcao r ON r.paciente_id=p.id
       LEFT JOIN dossies  d ON d.paciente_id=p.id
-      WHERE date(p.created_at)=date('now','localtime') OR p.status='em_atendimento'
+      WHERE date(p.created_at)=date('now','localtime')
+         OR p.status IN ('aguardando_recepcao','recepcao_conferencia','documentos_anexados','claude_processando','pronto_medico','em_consulta','evolucao_salva','apac_validacao','pendencia_administrativa')
       ORDER BY p.created_at DESC LIMIT 50
     `).all());
   } catch(e) { res.status(500).json({ message:"Erro interno." }); }
 });
 
-app.post("/api/medico/evolucao/salvar", (req, res) => {
+app.post("/api/medico/evolucao/salvar", clinicAuth, patientGuard, (req, res) => {
   try {
-    const { paciente_id, dossie_id, texto_evolucao } = req.body;
-    if (!paciente_id) return res.status(400).json({ message:"paciente_id obrigatório." });
+    const paciente_id = req.resolvedPacienteId;          // server-resolved — não do body
+    const { dossie_id, texto_evolucao } = req.body;
     const paciente = db.prepare("SELECT id,nome,cpf,cns,data_nascimento FROM pacientes WHERE id=?").get(paciente_id);
     if (!paciente) return res.status(404).json({ message:"Paciente não encontrado." });
     const security = prontuarioSecurityServer(paciente, texto_evolucao || "");
@@ -706,7 +804,7 @@ app.post("/api/medico/evolucao/salvar", (req, res) => {
       ).run(paciente_id, dossie_id||null, texto_evolucao);
       evolucaoId = info.lastInsertRowid;
     }
-    db.prepare("UPDATE pacientes SET status='concluido' WHERE id=?").run(paciente_id);
+    db.prepare("UPDATE pacientes SET status='evolucao_salva' WHERE id=?").run(paciente_id);
     res.json({ ok:true, evolucaoId });
   } catch(e) {
     console.error("[/evolucao/salvar]", e.message);
@@ -717,9 +815,9 @@ app.post("/api/medico/evolucao/salvar", (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // APAC
 // ─────────────────────────────────────────────────────────────
-app.post("/api/apac/gerar", async (req, res) => {
-  const { evolucao_id, paciente_id } = req.body;
-  if (!evolucao_id || !paciente_id) return res.status(400).json({ message:"Campos obrigatórios." });
+app.post("/api/apac/gerar", clinicAuth, patientGuard, evolucaoGuard, async (req, res) => {
+  const paciente_id = req.resolvedPacienteId;             // server-resolved
+  const evolucao_id = req.resolvedEvolucaoId;             // server-resolved
   try {
     const dados  = getPacienteCompleto(paciente_id);
     if (!dados) return res.status(404).json({ message:"Paciente não encontrado." });
@@ -763,6 +861,7 @@ app.post("/api/apac/gerar", async (req, res) => {
       ).run(vals);
       apacId = info.lastInsertRowid;
     }
+    db.prepare("UPDATE pacientes SET status='apac_validacao' WHERE id=?").run(paciente_id);
     res.json({ ok:true, apacId, validacao, campos });
   } catch(e) {
     console.error("[/apac/gerar]", e.message);
@@ -770,8 +869,16 @@ app.post("/api/apac/gerar", async (req, res) => {
   }
 });
 
-app.put("/api/apac/:id", (req, res) => {
+app.put("/api/apac/:id", clinicAuth, (req, res) => {
   try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ message:"id inválido." });
+    const atual = db.prepare("SELECT id,paciente_id,evolucao_id FROM apac WHERE id=?").get(id);
+    if (!atual) return res.status(404).json({ message:"APAC não encontrada." });
+    const bodyPacienteId = req.body?.paciente_id == null || req.body?.paciente_id === "" ? atual.paciente_id : Number(req.body.paciente_id);
+    const bodyEvolucaoId = req.body?.evolucao_id == null || req.body?.evolucao_id === "" ? atual.evolucao_id : Number(req.body.evolucao_id);
+    if (bodyPacienteId !== atual.paciente_id) return res.status(409).json({ message:"APAC pertence a outro paciente." });
+    if (bodyEvolucaoId !== atual.evolucao_id) return res.status(409).json({ message:"APAC pertence a outra evolução." });
     const val = validarAPAC(req.body);
     db.prepare(`UPDATE apac SET nome=@nome,cpf=@cpf,cns=@cns,nome_mae=@nome_mae,
       municipio=@municipio,cid10=@cid10,diagnostico_histologico=@diagnostico_histologico,
@@ -781,18 +888,22 @@ app.put("/api/apac/:id", (req, res) => {
       peso=@peso,altura=@altura,funcao_renal=@funcao_renal,funcao_hepatica=@funcao_hepatica,
       status_completude=@status_completude,pendencias_json=@pendencias_json,
       risco_glosa=@risco_glosa WHERE id=@id`
-    ).run({ ...req.body, ...val, id:Number(req.params.id) });
+    ).run({ ...req.body, ...val, id });
+    db.prepare("UPDATE pacientes SET status=? WHERE id=?").run(
+      val.status_completude === "completa" ? "apac_pronta" : "apac_validacao",
+      atual.paciente_id
+    );
     res.json({ ok:true, validacao:val });
   } catch(e) { res.status(500).json({ message:"Erro interno." }); }
 });
 
-app.get("/api/apac/:evolucaoId", (req, res) => {
+app.get("/api/apac/:evolucaoId", clinicAuth, (req, res) => {
   try {
     const a = db.prepare(
       "SELECT * FROM apac WHERE evolucao_id=? ORDER BY created_at DESC LIMIT 1"
     ).get(Number(req.params.evolucaoId));
     if (!a) return res.status(404).json({ message:"APAC não encontrada." });
-    res.json({ ...a, pendencias:JSON.parse(a.pendencias_json||"[]") });
+    res.set("Cache-Control", "no-store").json({ ...a, pendencias:JSON.parse(a.pendencias_json||"[]") });
   } catch(e) { res.status(500).json({ message:"Erro interno." }); }
 });
 

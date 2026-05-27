@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import { N, G, T, VM } from "../../utils/constants";
 import { sc_, H2, H3, Btn, NOW } from "../../components/ui/primitives";
-import { chamarClaude } from "../../utils/api";
+import { agentCallText, AGENT_INTENTS } from "../../utils/agentGateway";
 import { condutasDeResumoTriagem } from "../enfermagem/triagem-utils";
 
 const AGENTES_DISC_CLINICA=[
@@ -33,13 +33,13 @@ export default function DiscussaoClinicaIA({pac,dossie,triagens,triagemSeleciona
       const novos=[];
       for(const ag of AGENTES_DISC_CLINICA){
         const prompt=`Você é ${ag.nome}. Analise o caso como apoio à reunião clínica, sem substituir decisão médica. Foco: ${ag.foco}.\n\nResponda em português com estes títulos: IMPRESSÃO CLÍNICA, RISCO / URGÊNCIA, LACUNAS DE INFORMAÇÃO, PROPOSTA PARA DISCUSSÃO, ALERTA DE SEGURANÇA.\n\nPERGUNTA: ${pergunta}\n\n${caso}`;
-        let txt=await chamarClaude(prompt,900);
+        let txt=await agentCallText({prompt,maxTokens:900,intent:AGENT_INTENTS.EVOLUCAO,pac});
         if(!txt||/^⚠|erro/i.test(txt))txt=fallbackParecerAgente(ag,triagem);
         novos.push({...ag,texto:txt});
         setPareceres([...novos]);
       }
       const promptSintese=`Você preside uma discussão clínica de oncologia. Gere uma síntese final curta, para validação do médico, com decisão pendente explícita. Não prescreva como ordem automática.\n\nPergunta: ${pergunta}\n\nPareceres:\n${novos.map(p=>`${p.nome}\n${p.texto}`).join("\n\n")}\n\nCaso:\n${caso}`;
-      let final=await chamarClaude(promptSintese,900);
+      let final=await agentCallText({prompt:promptSintese,maxTokens:900,intent:AGENT_INTENTS.EVOLUCAO,pac});
       if(!final||/^⚠|erro/i.test(final))final=`SÍNTESE PARA VALIDAÇÃO MÉDICA\nCaso discutido por oncologia clínica, radioterapia e cirurgia oncológica. Priorizar segurança clínica, revisar sinais vitais e exames críticos, validar se há necessidade de emergência/internação, e registrar decisão final do médico no prontuário.\n\nPENDÊNCIAS\nHemograma com diferencial, função renal/hepática, avaliação do foco do sintoma e confirmação de estabilidade.\n\nOBSERVAÇÃO\nDocumento de apoio à decisão médica.`;
       setSintese(final);
     }catch(e){setErro(e.message||"Erro ao gerar discussão clínica.");}

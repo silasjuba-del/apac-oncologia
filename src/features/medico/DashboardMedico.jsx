@@ -274,7 +274,7 @@ export default function DashboardMedico({pac,consultasDia,alertas,mensagens,setM
         {curSlide.id==="home"
           ?<div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:20,alignItems:"center"}}>
             <div>
-              <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>⚕ Hospital do Bem · APACApp · Oncologia</div>
+              <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>Página inicial · APACApp · Oncologia</div>
               <h1 style={{fontSize:34,fontWeight:950,color:"#fff",margin:"0 0 8px",lineHeight:1.05}}>{saudacao}, Dr. Silas Negrão.</h1>
               <div style={{fontSize:14,color:"rgba(255,255,255,.72)",fontWeight:700,marginBottom:20}}>{frases[now.getDate()%4]}</div>
               <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
@@ -320,7 +320,7 @@ export default function DashboardMedico({pac,consultasDia,alertas,mensagens,setM
     <div style={{background:"#fff",border:"1.5px solid #E8EEF7",borderRadius:22,padding:"18px 20px",boxShadow:"0 6px 20px rgba(13,31,60,.06)"}}>
       <div style={{fontSize:10,color:"#94A3B8",fontWeight:900,textTransform:"uppercase",letterSpacing:1.5,marginBottom:14}}>Acessos rápidos</div>
       <div className="dmIcons" style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
-        {APP_ICONS.map((a,idx)=><button key={a.label} className="dmAppIcon" onClick={()=>setMedTab(a.action)}
+        {APP_ICONS.map((a,idx)=><button key={a.label} className="dmAppIcon" onClick={()=>setMedTab(a.action)} onDoubleClick={()=>setMedTab(a.action)}
           style={{display:"flex",flexDirection:"column",alignItems:"center",gap:7,padding:"16px 8px",borderRadius:18,background:a.bg,border:`1.5px solid ${a.border}`,boxShadow:"0 2px 8px rgba(13,31,60,.06)",animation:`dmIconPop .28s ${idx*.03}s cubic-bezier(.2,.8,.2,1) both`}}>
           <span style={{fontSize:30,lineHeight:1,filter:"drop-shadow(0 2px 4px rgba(0,0,0,.08))"}}>{a.ico}</span>
           <span style={{fontSize:11,fontWeight:900,color:a.c,lineHeight:1.2,textAlign:"center"}}>{a.label}</span>
@@ -340,7 +340,7 @@ export default function DashboardMedico({pac,consultasDia,alertas,mensagens,setM
         </div>
         <div style={{display:"grid",gap:7}}>
           {fila.slice(0,5).map((p,i)=>{const pr=prioStyle[p.prioridade]||prioStyle.media;return(
-            <button key={(p.pacID||p.nome||i)+"fd"} style={{border:`1px solid #E8EEF7`,borderRadius:14,padding:"10px 14px",display:"flex",alignItems:"center",gap:12,background:"#FAFCFF",cursor:"pointer",textAlign:"left",fontFamily:"inherit",transition:".14s ease",boxShadow:"0 1px 4px rgba(13,31,60,.04)"}}
+            <button key={`${p.pacID||p.nome||"pac"}-${i}-fd`} style={{border:`1px solid #E8EEF7`,borderRadius:14,padding:"10px 14px",display:"flex",alignItems:"center",gap:12,background:"#FAFCFF",cursor:"pointer",textAlign:"left",fontFamily:"inherit",transition:".14s ease",boxShadow:"0 1px 4px rgba(13,31,60,.04)"}}
               onMouseEnter={e=>{e.currentTarget.style.background="#F0F6FF";e.currentTarget.style.borderColor=G+"55";}}
               onMouseLeave={e=>{e.currentTarget.style.background="#FAFCFF";e.currentTarget.style.borderColor="#E8EEF7";}}
               onClick={()=>onAbrirAtendimento?onAbrirAtendimento(p):setMedTab("prontuario")}>

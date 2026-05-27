@@ -25,8 +25,28 @@
  *  - AgenteDrive: verificação de identidade antes de retornar dados
  *  - callClaude com retry automático (HTTP 529/500)
  *  - pac resumido no prompt (↓ tokens, ↓ exposição de PHI)
+ *
+ *  ⚠  ARQUITETURA DESCONECTADA — F3 (2025-05)
+ *
+ *  Este arquivo não é importado em nenhuma parte do projeto
+ *  (zero imports detectados na auditoria F3). Toda a arquitetura de
+ *  classe (SistemaAgentes, OrchestradorAgent, sistemaAgentes singleton)
+ *  existe aqui mas nunca é invocada pelo código de produção.
+ *
+ *  Os 9 call sites de IA no projeto usam `chamarClaude` direto de
+ *  src/utils/api.js — sem passar por este orquestrador.
+ *
+ *  CAMINHO DE REATIVAÇÃO (se desejado):
+ *    1. Substituir callClaude() aqui por chamarClaude() de utils/api.js
+ *    2. Registrar cada chamada via agentCall() de utils/agentGateway.js
+ *       para garantir o gate F0 (encounter obrigatório para intents clínicos)
+ *    3. Importar sistemaAgentes onde necessário (ex: StepperMedico etapa evolucao)
+ *
+ *  Mantido intacto para não perder a lógica de tiering e retry.
  * ══════════════════════════════════════════════════════════════
  */
+
+import { SYSTEM_PROMPT_6BLOCOS, buildUserPrompt6Blocos, MAX_TOKENS_6BLOCOS } from "./prompts.js";
 
 // ── Modelos por complexidade ───────────────────────────────────
 const MODELS = {
@@ -250,27 +270,23 @@ class AgentBase {
 // ══════════════════════════════════════════════════════════════
 export class AgenteProntuario extends AgentBase {
   constructor() {
+    // Usa o prompt 6-BLOCOS canônico — fonte de verdade em src/agents/prompts.js
     super("Prontuário", "📋", "Preenche e atualiza o prontuário oncológico automaticamente",
-      `Você é um assistente oncológico especializado em prontuários médicos do Dr. Silas Negrão (CRM-PB 17341).
-Seu papel é analisar dados do paciente e preencher/atualizar campos do prontuário de forma estruturada.
-Use as ferramentas disponíveis para atualizar campos específicos.
-Seja preciso, clínico e baseie-se nos dados fornecidos. Nunca invente informações.
-Responda sempre em português brasileiro.`);
+      SYSTEM_PROMPT_6BLOCOS);
   }
 
   async executar(pac, instrucao = "Analise e complete o prontuário") {
+    const userMsg = buildUserPrompt6Blocos(
+      instrucao,
+      pac,
+      []
+    );
     const messages = [{
       role: "user",
-      content: `INSTRUÇÃO: ${instrucao}
-
-DADOS ATUAIS DO PACIENTE:
-${pacResumo(pac)}
-
-Analise os dados, identifique campos incompletos ou que precisam de melhoria clínica,
-e use as ferramentas para atualizar o prontuário. Priorize campos obrigatórios para APAC.`,
+      content: userMsg,
     }];
 
-    const resp = await callClaude(messages, this.systemPrompt, TOOLS_PRONTUARIO, MAX_TOK, MODELS.sonnet);
+    const resp = await callClaude(messages, this.systemPrompt, TOOLS_PRONTUARIO, MAX_TOKENS_6BLOCOS, MODELS.sonnet);
     const acoes = getToolUse(resp);
     const texto = getText(resp);
 

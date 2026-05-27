@@ -12,7 +12,8 @@
     "start": "node server/index.js",
     "test": "vitest run",
     "lint": "eslint src --ext .js,.jsx --max-warnings 120",
-    "lint:fix": "eslint src --ext .js,.jsx --fix"
+    "lint:fix": "eslint src --ext .js,.jsx --fix",
+    "reset-db": "node -e \"const fs=require('fs');['onco_app.db','onco_app.db-shm','onco_app.db-wal'].forEach(f=>{if(fs.existsSync(f)){fs.copyFileSync(f,f+'.bak');fs.unlinkSync(f);console.log('Apagado:',f);}});console.log('Banco resetado. Execute npm start para recriar.');\""
   },
   "type": "module",
   "homepage": "https://silasjuba-del.github.io/apac-oncologia",

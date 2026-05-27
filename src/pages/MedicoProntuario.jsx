@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import UploadSimples from "../components/UploadSimples.jsx";
+import { _backendHeaders, _clinicKeyHeaders } from "../utils/api.js";
 
 const API_URL = (import.meta.env.VITE_API_URL || "http://127.0.0.1:3001").replace(/\/$/, "");
 
@@ -159,7 +160,11 @@ export default function MedicoProntuario() {
     setBusca(q);
     if (q.length < 2) { setSugestoes([]); return; }
     try {
-      const r = await fetch(`${API_URL}/api/paciente/busca?q=${encodeURIComponent(q)}`);
+      const r = await fetch(`${API_URL}/api/paciente/busca`, {
+        method:"POST",
+        headers:_backendHeaders(),
+        body:JSON.stringify({ q }),
+      });
       setSugestoes(await r.json());
     } catch { setSugestoes([]); }
   }
@@ -235,7 +240,7 @@ export default function MedicoProntuario() {
         fd.append("datas", metaLaudos[i]?.data || "");
       });
 
-      const r    = await fetch(`${API_URL}/api/dossie/gerar`, { method:"POST", body:fd });
+      const r    = await fetch(`${API_URL}/api/dossie/gerar`, { method:"POST", headers:_clinicKeyHeaders(), body:fd });
       const data = await r.json();
       if (!r.ok) throw new Error(data.message);
       setDossieId(data.dossieId);
@@ -243,7 +248,7 @@ export default function MedicoProntuario() {
       // Polling a cada 4s
       pollingRef.current = setInterval(async () => {
         try {
-          const s = await fetch(`${API_URL}/api/dossie/status/${data.dossieId}`).then(r => r.json());
+          const s = await fetch(`${API_URL}/api/dossie/status/${data.dossieId}?paciente_id=${encodeURIComponent(paciente.id)}`, { headers:_clinicKeyHeaders() }).then(r => r.json());
           if (s.status_analise === "concluido") {
             clearInterval(pollingRef.current);
             setDossieRaw(s.resumo_claude);
@@ -270,7 +275,7 @@ export default function MedicoProntuario() {
     try {
       const r = await fetch(`${API_URL}/api/medico/evolucao/salvar`, {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:_backendHeaders(),
         body: JSON.stringify({ paciente_id: paciente.id, dossie_id: dossieId, texto_evolucao: evolucao }),
       });
       const d = await r.json();
@@ -593,6 +598,7 @@ function APACPanel({ paciente, evolucaoId, dossieRaw }) {
     peso:"", altura:"", superficie_corporal:"",
     funcao_renal:"", funcao_hepatica:"",
   });
+  const [apacId, setApacId] = useState(null);
   const [gerando, setGerando] = useState(false);
 
   useEffect(() => {
@@ -613,10 +619,11 @@ function APACPanel({ paciente, evolucaoId, dossieRaw }) {
     try {
       const r = await fetch(`${API_URL}/api/apac/gerar`, {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:_backendHeaders(),
         body: JSON.stringify({ evolucao_id: evolucaoId, paciente_id: paciente.id }),
       });
       const d = await r.json();
+      if (d.apacId) setApacId(d.apacId);
       if (d.campos) setCampos(x => ({ ...x, ...d.campos }));
     } finally { setGerando(false); }
   }
@@ -703,9 +710,13 @@ function APACPanel({ paciente, evolucaoId, dossieRaw }) {
 
         <div style={{ display:"flex", gap:10, marginTop:20 }}>
           <button onClick={() => {
-            fetch(`${API_URL}/api/apac/${evolucaoId || 0}`, {
-              method:"PUT", headers:{"Content-Type":"application/json"},
-              body:JSON.stringify(campos),
+            if (!apacId) {
+              alert("Gere a APAC antes de salvar.");
+              return;
+            }
+            fetch(`${API_URL}/api/apac/${apacId}`, {
+              method:"PUT", headers:_backendHeaders(),
+              body:JSON.stringify({ ...campos, paciente_id:paciente.id, evolucao_id:evolucaoId }),
             });
             alert("APAC salva com sucesso!");
           }} style={{ flex:1, padding:"12px 0", background:C.navy, color:C.white,

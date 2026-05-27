@@ -34,11 +34,26 @@ const ENCOUNTER_HISTORY_KEY = 'apacapp_encounters_historico_v1';
  *
  * @param {Object} encounter - objeto criado por createEncounter()
  */
+/**
+ * openEncounter — registra encounter ativo no localStorage.
+ * Retorna { ok: true } em caso de sucesso ou { ok: false, reason } se falhar.
+ * O chamador (App.jsx) DEVE tratar o erro e avisar o médico visivelmente —
+ * falha silenciosa aqui resulta em saves bloqueados sem aviso.
+ *
+ * @param {Object} encounter — criado por createEncounter()
+ * @returns {{ ok: boolean, reason?: string }}
+ */
 export function openEncounter(encounter) {
   try {
     localStorage.setItem(ENCOUNTER_STORAGE_KEY, JSON.stringify(encounter));
-  } catch (_) {
-    // localStorage cheio ou indisponível — não travar o atendimento
+    return { ok: true };
+  } catch (e) {
+    const reason =
+      'Não foi possível registrar o atendimento (armazenamento local indisponível). ' +
+      'Verifique se o navegador não está em modo privado ou com capacidade esgotada. ' +
+      'Detalhe: ' + (e?.message || 'localStorage indisponível');
+    console.error('[openEncounter] Falha crítica:', reason);
+    return { ok: false, reason };
   }
 }
 
@@ -107,7 +122,17 @@ export function quarantineEncounter(motivo) {
  * @param {boolean}  [opts.forceSave]  - override para uso interno (somente testes)
  */
 export function saveClinicalArtifact(artifact, dossie, pac, setDossie, opts = {}) {
-  const { newStatus, forceSave } = opts;
+  const { newStatus } = opts;
+
+  // forceSave: aceito SOMENTE em ambiente de desenvolvimento/teste.
+  // Em produção, bloqueia para evitar bypass acidental do contrato F0.
+  const _isDevOrTest = (typeof import.meta !== 'undefined' && import.meta.env?.DEV) ||
+                       (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test');
+  const forceSave = opts.forceSave && _isDevOrTest;
+  if (opts.forceSave && !_isDevOrTest) {
+    console.error('[saveClinicalArtifact] forceSave=true BLOQUEADO em produção. Use o fluxo normal.');
+    return { ok: false, reason: 'forceSave não permitido em ambiente de produção.' };
+  }
 
   // ── 1. Verificar patientId + encounterId ──────────────────────────────────
   if (!artifact?.patientId) {

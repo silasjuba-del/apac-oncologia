@@ -18,7 +18,7 @@ import {
   RecepcaoDossiePanel, DocumentosPosEvolucao,
 } from './features/medico/DossieBarComponents';
 import { APACDossieChecklist, APACEntradaRapida } from './features/medico/APACDossieComps';
-import { chavePaciente } from './features/oncoProUtils.js';
+import { chavePaciente, criarEntradaDado } from './features/oncoProUtils.js';
 import {
   normalizaPacienteValor, executarProntuarioSecurity, mesmoPacienteDossie,
   loadDossiePaciente, saveDossiePaciente, limparModuloPacienteStorage,
@@ -88,15 +88,22 @@ const DriveDossieComp      = React.lazy(()=>import('./features/medico/DriveDossi
 const ProntuarioDossieUnico= React.lazy(()=>import('./features/medico/ProntuarioDossieUnico'));
 const StepperMedico        = React.lazy(()=>import('./features/medico/StepperMedico'));
 const PrimConsultaPaciente = React.lazy(()=>import('./features/medico/PrimConsultaPaciente'));
+const KitDocumentosComp   = React.lazy(()=>import('./features/medico/KitDocumentosComp'));
+const ApagarDadosPanel    = React.lazy(()=>import('./features/medico/ApagarDadosPanel'));
+const AdminQuickAccess    = React.lazy(()=>import('./features/medico/AdminQuickAccess.jsx'));
+const APACClinicalTools   = React.lazy(()=>import('./features/medico/APACClinicalTools.jsx'));
 import {
   loadPacAtual, savePacAtual, clearPacAtual,
-  loadAiPatches, saveAiPatches,
+  loadAiPatches, saveAiPatches, loadPacientes,
 } from './utils/storage.js';
 // ── F0 — Contrato de identidade clínica ──────────────────────────────────────
 import {
-  openEncounter, closeEncounter, requireEncounter,
+  openEncounter, closeEncounter, requireEncounter, saveClinicalArtifact,
 } from './utils/clinicalStore';
-import { createEncounter, ENCOUNTER_TIPOS } from './utils/encounterMachine';
+import {
+  createEncounter, createArtifact, ENCOUNTER_TIPOS,
+  ARTIFACT_TYPES, ARTIFACT_SOURCES, ARTIFACT_STATUS,
+} from './utils/encounterMachine';
 import {
   dbInit, dbSalvarPaciente, dbCarregarPacientes,
   dbSalvarAgenda, dbCarregarAgenda,
@@ -117,7 +124,8 @@ import {
   BIOM, CID_DB, getCID, CID_SEDE_DB, getCIDPorSede, getTNMEstadio, ECOG_OPTS, LINHA_OPTS,
   ESTOQUE_IV, MEDS_ORAIS,
 } from './utils/constants';
-import { _getApiKey, _apiUrl, chamarClaude, chamarGPT, chamarGemini, chamarGrok } from './utils/api';
+import { _getApiKey, _apiUrl, _backendHeaders, chamarClaude, chamarGPT, chamarGemini, chamarGrok } from './utils/api';
+import { createBoundClaude, AGENT_INTENTS } from './utils/agentGateway';
 
 // ── F0 — Inferir tipo de encounter a partir dos dados do paciente ─────────────
 // Regra: QT detectado pelo protocolo/tratamento → RETORNO_QT
@@ -194,12 +202,89 @@ function ConfiguracoesComp({pac,up,funcLogado,onQuarentena}){
   </div>;
 }
 
+const VIDEOS_EDU=[
+  {id:"Ah9HL1Fdbyw",t:"Como funciona a quimioterapia?",cat:"Tratamento",dur:"7 min",cor:T},
+  {id:"5aw-P4NAXYU",t:"Alimentacao durante o tratamento",cat:"Nutricional",dur:"5 min",cor:VE},
+  {id:"BpN6JKi4ggs",t:"Sinais de alarme: quando procurar o hospital",cat:"Seguranca",dur:"4 min",cor:VM},
+  {id:"5XFBIXR0vts",t:"Suporte emocional e familia",cat:"Bem-estar",dur:"8 min",cor:"#7C3AED"},
+  {id:"H0gFjnxBuAQ",t:"Direitos do paciente com cancer",cat:"Direitos",dur:"6 min",cor:AM},
+  {id:"a2RpwxGhSQo",t:"Cuidados com cateter e acesso venoso",cat:"Cuidados",dur:"4 min",cor:"#0EA5E9"},
+];
+
+function VideosYouTube(){
+  const [sel,setSel]=useState(VIDEOS_EDU[0]);
+  return <div style={{display:"grid",gap:12}}>
+    <div style={sc_.card({overflow:"hidden",padding:0})}>
+      <div style={{background:N,color:"#fff",padding:"12px 14px",display:"flex",justifyContent:"space-between",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <div>
+          <div style={{fontSize:11,color:G,fontWeight:900,textTransform:"uppercase",letterSpacing:.5}}>Educacao do paciente</div>
+          <h2 style={{margin:"2px 0 0",fontSize:16,fontWeight:950}}>Videos e orientacoes</h2>
+        </div>
+        <span style={{background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.22)",borderRadius:999,padding:"6px 10px",fontSize:11,fontWeight:800}}>
+          Conteudo para revisar em casa
+        </span>
+      </div>
+      <div style={{aspectRatio:"16/9",background:"#0F172A"}}>
+        {sel?.id?<iframe
+          title={sel.t}
+          src={`https://www.youtube.com/embed/${sel.id}`}
+          style={{width:"100%",height:"100%",border:0}}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />:<div style={{color:"#fff",display:"grid",placeItems:"center",height:"100%"}}>Selecione um video.</div>}
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:10}}>
+      {VIDEOS_EDU.map(v=><button key={v.id} onClick={()=>setSel(v)}
+        style={{textAlign:"left",cursor:"pointer",border:"1.5px solid "+(sel?.id===v.id?v.cor:"#DDE3EC"),background:sel?.id===v.id?v.cor+"12":"#fff",borderRadius:12,padding:12,fontFamily:"inherit",boxShadow:sel?.id===v.id?"0 6px 18px rgba(15,23,42,.12)":"none"}}>
+        <div style={{fontSize:11,fontWeight:900,color:v.cor,textTransform:"uppercase",letterSpacing:.4}}>{v.cat} · {v.dur}</div>
+        <div style={{fontSize:13,fontWeight:900,color:N,lineHeight:1.25,marginTop:5}}>{v.t}</div>
+      </button>)}
+    </div>
+  </div>;
+}
+
+function CarteirinhaNova({pac}) {
+  const dados=[
+    ["Paciente",pac?.nome||"Nao informado"],
+    ["ID",pac?.pacID||pac?.id||"Nao gerado"],
+    ["Diagnostico",pac?.diag||pac?.diagnostico||"Nao informado"],
+    ["Protocolo",pac?.trat||pac?.protocolo||"Nao informado"],
+    ["Alergias",pac?.alerg||pac?.alergias||"Nao informado"],
+    ["Contato",pac?.tel||pac?.telefone||pac?.whatsapp||"Nao informado"],
+  ];
+  const texto=dados.map(([k,v])=>`${k}: ${v}`).join("\n")+`\n\n${HOSP}\n${AUTOR}`;
+  return <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:12,alignItems:"stretch"}}>
+    <div style={{borderRadius:18,overflow:"hidden",background:`linear-gradient(135deg,${N},#2756A0)`,boxShadow:"0 14px 32px rgba(27,54,93,.24)",border:`2px solid ${G}`}}>
+      <div style={{padding:"14px 16px",borderBottom:"1px solid rgba(255,255,255,.16)",display:"flex",justifyContent:"space-between",gap:10,alignItems:"center"}}>
+        <div>
+          <div style={{color:G,fontSize:11,fontWeight:950,textTransform:"uppercase",letterSpacing:.6}}>Carteirinha oncologica</div>
+          <div style={{color:"#fff",fontSize:16,fontWeight:950,marginTop:2}}>{pac?.nome||"Paciente"}</div>
+        </div>
+        <div style={{width:54,height:54,borderRadius:14,background:"rgba(255,255,255,.12)",display:"grid",placeItems:"center",fontSize:28}}>🪪</div>
+      </div>
+      <div style={{padding:14,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:8}}>
+        {dados.slice(1).map(([k,v])=><div key={k} style={{background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.16)",borderRadius:10,padding:"8px 10px"}}>
+          <div style={{color:"rgba(255,255,255,.62)",fontSize:10,fontWeight:850,textTransform:"uppercase"}}>{k}</div>
+          <div style={{color:"#fff",fontSize:12,fontWeight:850,marginTop:2,wordBreak:"break-word"}}>{v}</div>
+        </div>)}
+      </div>
+    </div>
+    <button onClick={()=>abrirDoc("Carteirinha oncologica",texto)}
+      style={{border:"none",borderRadius:14,background:G,color:"#fff",fontWeight:950,cursor:"pointer",padding:"0 16px",minWidth:112,fontFamily:"inherit"}}>
+      Imprimir
+    </button>
+  </div>;
+}
+
 function DriveIntegracaoComp({pac,up,addMsg,dossie,setDossie}){return <DriveDossieComp pac={pac} dossie={dossie} setDossie={setDossie} addMsg={addMsg}/>;}
 export default function App(){
   const [showAbertura,setShowAbertura]=useState(true);
   const [pg,setPg]=useState("landing");
   const [emergenciaAtiva,setEmergenciaAtiva]=useState(null);
   const [chatFlutAberto,setChatFlutAberto]=useState(false);
+  const [buscaMedicoRapida,setBuscaMedicoRapida]=useState("");
+  const [pacientesBuscaRapida,setPacientesBuscaRapida]=useState([]);
   const pacInicial=loadPacAtual()||{...PAC0};
   const [pac,setPac]=useState(()=>pacInicial);
   const [dossieOncologico,setDossieOncologico]=useState(()=>loadDossiePaciente(pacInicial)||criarDossieInicial(pacInicial));
@@ -266,6 +351,9 @@ export default function App(){
   const [enfermagemTab2,setEnfermagemTab2]=useState("triagem"); // sub-tabs da enfermagem na lateral
   const [prescricaoTab2,setPrescricaoTab2]=useState("motor45"); // sub-tabs da prescrição QT
   const [pronTab,setPronTab]=useState("consulta");
+  // goTab: wrapper com startTransition para todas as navegações de aba
+  // Evita "suspended while responding to synchronous input" no React.lazy
+  const goTab=(id,extra)=>React.startTransition(()=>{setMedTab2(id);extra&&extra();});
   const [cicloLiberado,setCicloLiberado]=useState(false);
   const [funcLogado,setFuncLogado]=useState(EQUIPE[0]);
   const [laudoLiberado,setLaudoLiberado]=useState(false);
@@ -277,6 +365,21 @@ export default function App(){
     {id:2,de:"Recepção",titulo:"Confirmação de Retorno",conteudo:"Retorno: 03/06/2026 às 09h00.\nHospital do Bem — Patos-PB.\nChegue 30 minutos antes.",dt:"14/05/2026 14:30",lida:true,tipo:"msg"},
   ]);
   const addCaixaEntrada=(entry)=>setCaixaEntrada(x=>[{...entry,id:Date.now(),dt:new Date().toLocaleString("pt-BR"),lida:false},...x]);
+  useEffect(()=>{
+    let ativo=true;
+    const carregarPacientesBusca=()=>{
+      try{
+        const locais=loadPacientes?.()||[];
+        if(ativo)setPacientesBuscaRapida(locais);
+      }catch(_){}
+      dbCarregarPacientes().then(lista=>{
+        if(ativo&&lista?.length)setPacientesBuscaRapida(lista);
+      }).catch(()=>{});
+    };
+    carregarPacientesBusca();
+    const id=setInterval(carregarPacientesBusca,30000);
+    return()=>{ativo=false;clearInterval(id);};
+  },[]);
   const [historicoQT,setHistoricoQTRaw]=useState([]);
   const setHistoricoQT=v=>{const n=typeof v==="function"?v(historicoQT):v;setHistoricoQTRaw(n);dbSalvarHistoricoQT(n);};
   const [triagens,setTriagensRaw]=useState([]);
@@ -324,7 +427,8 @@ export default function App(){
     novo.apac=validarAPAC(novo);
     setPac(novoPac);savePacAtual(novoPac);dbSalvarPaciente(novoPac);
     // F0 — registrar encounter ativo no localStorage para o portão de salvamento
-    openEncounter(createEncounter(novoPac.pacID, _inferirTipoEncounter(novoPac)));
+    {const encResult=openEncounter(createEncounter(novoPac.pacID, _inferirTipoEncounter(novoPac)));
+    if(!encResult.ok){addMsg("Sistema","Médico","⚠️ ATENÇÃO: Não foi possível registrar o atendimento no armazenamento local. "+encResult.reason,"alerta");}}
     setDossieOncologico(novo);
     setConsultasDia(x=>x.map(p=>((p.pacID&&p.pacID===novoPac.pacID)||p.nome===novoPac.nome)?{...p,status:"em_consulta",pacID:novoPac.pacID}:p));
     setMedTab("prontuario");setPronTab("consulta");
@@ -362,12 +466,19 @@ export default function App(){
     const texto=String(res||"").trim();
     if(!texto){alert("Nenhum resumo foi gerado para inserir no prontuário.");return false;}
     if(!executarProntuarioSecurity({pac,texto,dossie:dossieOncologico,origem:meta?.tipo||"Upload IA"},addMsg))return false;
-    // F0 — verificar encounter ativo antes de escrever documento no dossiê
-    const _encOk = requireEncounter(pac);
+    // F0 — garantir encounter ativo; auto-abre se médico trabalha diretamente
+    let _encOk = requireEncounter(pac);
     if(!_encOk.ok){
-      console.warn("[F0] adicionarDocumentoPadraoDossie bloqueado:", _encOk.reason);
-      alert("⚠ Inicie um atendimento antes de adicionar documentos ao prontuário.\n(" + _encOk.reason + ")");
-      return false;
+      const _pacID=pac.pacID||genPacID();
+      const _autoEnc=createEncounter(_pacID,_inferirTipoEncounter(pac));
+      const _opened=openEncounter(_autoEnc);
+      if(_opened.ok){
+        _encOk={ok:true};
+        console.info("[F0] adicionarDocumentoPadraoDossie: encounter auto-aberto para",_pacID);
+      }else{
+        console.warn("[F0] adicionarDocumentoPadraoDossie bloqueado:", _encOk.reason);
+        // Não bloqueia upload de documentos de suporte — apenas loga
+      }
     }
     setDossieOncologico(d=>{
       const base=mesmoPacienteDossie(d,pac)?(d||criarDossieInicial(pac)):criarDossieInicial(pac);
@@ -397,6 +508,77 @@ export default function App(){
       novo.apac=validarAPAC(novo);
       return novo;
     });
+    return true;
+  },[pac,dossieOncologico,addMsg]);
+
+  const salvarEvolucaoAssinada=useCallback((evolucao,opts={})=>{
+    const texto=String(evolucao||"").trim();
+    const origem=opts.origem||"Salvar evolução do dossiê";
+    const tipo=opts.tipo||"Consulta médica";
+    const fonte=opts.fonte||"dossie";
+    const autor=opts.autor||"Dr. Silas Negrão — CRM-PB 17341";
+    const msgDe=opts.msgDe||"Médico";
+    const msgTexto=opts.msgTexto||("✅ Evolução salva: "+(pac?.nome||"paciente")+".");
+
+    if(!texto){
+      addMsg&&addMsg("Prontuário Security","Médico","⚠️ Evolução vazia não foi salva.","alerta");
+      return false;
+    }
+    if(!executarProntuarioSecurity({pac,texto,dossie:dossieOncologico,origem},addMsg))return false;
+
+    const encCheck=requireEncounter(pac);
+    if(!encCheck.ok){
+      addMsg&&addMsg("Prontuário Security","Médico","⚠️ "+encCheck.reason,"alerta");
+      return false;
+    }
+
+    const patientId=pac?.pacID||pac?.cpf||pac?.cns;
+    const artifactFonte=fonte==="ia"||fonte==="ia_discussao"
+      ? ARTIFACT_SOURCES.IA
+      : ARTIFACT_SOURCES.MEDICO;
+    const artifact={
+      ...createArtifact({
+        encounterId:encCheck.encounter.encounterId,
+        patientId,
+        artifactType:ARTIFACT_TYPES.EVOLUCAO,
+        source:artifactFonte,
+        pac,
+        content:texto,
+      }),
+      status:ARTIFACT_STATUS.MEDICAL_VALIDATED,
+    };
+    const saved=saveClinicalArtifact(
+      artifact,
+      dossieOncologico,
+      pac,
+      setDossieOncologico,
+      {newStatus:ARTIFACT_STATUS.MEDICAL_SIGNED}
+    );
+    if(!saved.ok){
+      addMsg&&addMsg("Prontuário Security","Médico","⚠️ Evolução não salva: "+saved.reason,"alerta");
+      return false;
+    }
+
+    const dt=new Date();
+    const novaEv={
+      id:Date.now(),
+      artifactId:saved.artifact?.artifactId,
+      encounterId:encCheck.encounter.encounterId,
+      status:ARTIFACT_STATUS.MEDICAL_SIGNED,
+      data:dt.toLocaleDateString("pt-BR"),
+      hora:dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
+      tipo,
+      texto,
+      autor,
+      fonte,
+    };
+    setPac(prev=>{
+      const novo={...prev,evolucoes:[novaEv,...(prev?.evolucoes||[])]};
+      savePacAtual(novo);
+      dbSalvarPaciente(novo);
+      return novo;
+    });
+    addMsg&&addMsg(msgDe,"Médico",msgTexto,"msg");
     return true;
   },[pac,dossieOncologico,addMsg]);
 
@@ -468,9 +650,74 @@ export default function App(){
     alert(`Limpeza concluída: ${r.pacientes} paciente(s), ${r.dossies} dossiê(s), ${r.fila} fila(s), ${r.consultas} consulta(s), ${r.entradas} entrada(s) de módulo.`);
   },[pac,setListaEspera,setConsultasDia,zerarContextoAtivo]);
 
+  const zerarTodosAtendimentosLocais=useCallback(()=>{
+    if(!window.confirm("ZERAR TODOS OS ATENDIMENTOS LOCAIS? Use apenas se todos os pacientes e dossiês desta instalação forem testes."))return;
+    if(!window.confirm("Confirma novamente? Pacientes, filas, consultas, dossiês, rascunhos, triagens e resultados de agentes serão removidos deste navegador."))return;
+    try{
+      const prefixos=[
+        "onco_",
+        "dossie_",
+        "apacapp_",
+        "consultasDia_",
+        "resumo_ia_",
+      ];
+      const chaves=Object.keys(localStorage).filter(k=>
+        prefixos.some(p=>k.startsWith(p)) ||
+        k==="faturamento_log"
+      );
+      const backup={};
+      chaves.forEach(k=>{backup[k]=localStorage.getItem(k);});
+      const backupKey="_backup_reset_apacapp_"+Date.now();
+      localStorage.setItem(backupKey,JSON.stringify({criadoEm:new Date().toISOString(),chaves:chaves.length,dados:backup}));
+      chaves.forEach(k=>localStorage.removeItem(k));
+      closeEncounter();
+      alert(`App local zerado. Backup criado em ${backupKey}.`);
+      location.reload();
+    }catch(e){
+      alert("Não foi possível zerar tudo: "+(e?.message||e));
+    }
+  },[]);
+
   const glosa=calcGlosa([],pac);
   const totalAlertas=MOCK_ALERTAS.length;
   const totalAl=totalAlertas;
+  const atendimentosMedicos=[
+    ...(listaEspera||[]).map(p=>({...p,status:p.status||"aguardando",proto:p.proto||p.trat||"Primeira consulta"})),
+    ...(consultasDia||[])
+  ];
+  const pacientesBuscaHeader=useMemo(()=>{
+    const origem=[
+      ...(pacientesBuscaRapida||[]),
+      ...(listaEspera||[]),
+      ...(consultasDia||[]),
+    ];
+    const mapa=new Map();
+    origem.forEach((p,idx)=>{
+      const nome=p?.nome||p?.pac||"";
+      if(!nome)return;
+      const chave=String(p?.pacID||p?.cpf||p?.cns||nome).toLowerCase();
+      if(!mapa.has(chave))mapa.set(chave,{...p,nome,pacID:p?.pacID||p?.id||("busca-"+idx)});
+    });
+    return Array.from(mapa.values()).slice(0,80);
+  },[pacientesBuscaRapida,listaEspera,consultasDia]);
+  const abrirPacienteBuscaHeader=useCallback(()=>{
+    const q=String(buscaMedicoRapida||"").trim().toLowerCase();
+    if(!q){setMedTab2("pacientes");return;}
+    const achado=pacientesBuscaHeader.find(p=>
+      String(p.nome||"").toLowerCase().includes(q)||
+      String(p.cpf||"").replace(/\D/g,"").includes(q.replace(/\D/g,""))||
+      String(p.cns||"").replace(/\D/g,"").includes(q.replace(/\D/g,""))||
+      String(p.pacID||"").toLowerCase().includes(q)
+    );
+    if(achado){
+      abrirAtendimento(achado);
+      setBuscaMedicoRapida("");
+      setMedTab2("prontuario");
+      setPronTab2("evolucao");
+      return;
+    }
+    setMedTab2("pacientes");
+  },[buscaMedicoRapida,pacientesBuscaHeader,abrirAtendimento]);
   const goAlerta=()=>setMedTab("alertas");
   const NIV={verm:{label:"URGENTE"},amar:{label:"ATENÇÃO"},verd:{label:"OK"}};
     const resumoProntuario=`IDENTIFICAÇÃO\n${pac.nome||"___"}, ${pac.nasc||"__"}, ${pac.cidade||"___"}\nCPF: ${pac.cpf||"—"} · CNS: ${pac.cns||"—"}\n\nANTECEDENTES\n${pac.antec||"—"}.\nMedicações: ${pac.meds||"—"}. Alergias: ${pac.alerg||"—"}.${pac.exFisico?`\n\nEXAME FÍSICO\n${pac.exFisico}`:""}\n\nDIAGNÓSTICO ONCOLÓGICO\n${pac.diag||"—"} · CID: ${pac.cid||"—"} · TNM: ${pac.tnm||"—"} · Estádio: ${pac.estadio||"—"}\nBiomarcadores: ${pac.bio||"—"} · ECOG: ${pac.ecog||"—"}\n\nTRATAMENTO\n${pac.trat||"—"} · ${pac.linha||"—"} · ${pac.intencao||"—"}\n\n${HOSP}\n${AUTOR}`;
@@ -502,7 +749,6 @@ export default function App(){
     {id:"pacientes",ico:"👥",l:"Pacientes"},
     {id:"prontuario",ico:"📋",l:"Prontuário"},
     {id:"quimio",ico:"💉",l:"Prescrição médica"},
-    {id:"exames_med",ico:"🔬",l:"Novos Exames"},
     {id:"receitas",ico:"📝",l:"Receitas"},
     {id:"apac",ico:"📄",l:"APAC"},
     {id:"antiglosa",ico:"🛡",l:"Anti-Glosa"},
@@ -514,7 +760,6 @@ export default function App(){
     {id:"consultas_dia",ico:"📅",l:"Consultas Hoje"},
     {id:"agenda_med",ico:"🗓",l:"Agendamento"},
     {id:"ia_hub",ico:"🤖",l:"IA Hub"},
-    {id:"ia_agent",ico:"🧠",l:"Assistente IA"},
     {id:"oncoagent",ico:"🔬",l:"OncoAgent"},
     {id:"ia_test",ico:"🔬",l:"Testar IA"},
     {id:"trials",ico:"🧬",l:"Trials"},
@@ -548,24 +793,22 @@ export default function App(){
       case "prontuario": return <div>
         {aiPatches.length>0&&<div style={{marginBottom:12}}><ReviewBanner patches={aiPatches} onApply={({approvedFields,rejectedFields,editedFields,patchId})=>{approvedFields.forEach(({field,value})=>up&&up(field,value));setAiPatches(x=>x.filter(p=>p.id!==patchId));}} onDismiss={()=>setAiPatches([])}/></div>}
         <div style={{display:"flex",gap:6,marginBottom:14,borderBottom:`3px solid ${G}`,paddingBottom:8}}>
-          {[{id:"consulta",l:"📝 Evolução"},{id:"timeline",l:"🕒 Timeline"}].map(t=><button key={t.id} onClick={()=>setPronTab(t.id)} style={{...sc_.btn(pronTab===t.id?"gold":"ghost",{fontSize:13,padding:"9px 20px"})}}>{t.l}</button>)}
+          {[{id:"consulta",l:"📝 Evolução"},{id:"timeline",l:"🕒 Timeline"}].map(t=><button key={t.id} onClick={()=>React.startTransition(()=>setPronTab(t.id))} style={{...sc_.btn(pronTab===t.id?"gold":"ghost",{fontSize:13,padding:"9px 20px"})}}>{t.l}</button>)}
           <button onClick={()=>{if(window.confirm("Limpar o atendimento atual da tela?")){const novoPac={...PAC0,pacID:genPacID()};setPac(novoPac);clearPacAtual?.();setDossieOncologico(criarDossieInicial(novoPac));setPronTab("consulta");}}} style={{...sc_.btn("ghost",{fontSize:11,padding:"7px 12px",marginLeft:"auto",color:"#94A3B8"})}}>🗑 Limpar atendimento</button>
         </div>
-        {pronTab==="timeline"&&<div style={sc_.card()}><h3 style={{color:N,fontWeight:900,fontSize:14,marginBottom:12}}>🕒 Linha do Tempo — Exames e Evoluções</h3><EvolutionTimeline exams={pac?.exames_imagem||[]} triages={(pac?.evolucoes||[]).map(e=>{
-          let dataHora;
-          try{const [d,m,y]=(e.data||"01/01/2020").split("/");dataHora=new Date(`${y}-${m}-${d}T${e.hora||"00:00"}:00`).toISOString();}catch(_){dataHora=new Date().toISOString();}
-          return {id:e.id||String(Date.now()),__source:"evolucao",dataHora,tipo:e.tipo||"consulta",enfermeiroNome:e.autor||"Médico",queixaAtual:e.texto,sinaisAlarme:[],qtLiberada:null};
-        }).concat((triagens||[]).map(t=>({...t,__source:"triagem"})))} onDelete={apagarItemTimeline}/></div>}
-        {pronTab==="consulta"&&<ProntuarioDossieUnico pac={pac} dossie={dossieOncologico} setDossie={setDossieGuardado} up={up} addMsg={addMsg} onAbrirAPAC={()=>setMedTab("apac")} onSalvarEvolucao={(evolucao)=>{
-          if(!executarProntuarioSecurity({pac,texto:evolucao,dossie:dossieOncologico,origem:"Salvar evolução do dossiê"},addMsg))return false;
-          const dt=new Date();
-          const novaEv={id:Date.now(),data:dt.toLocaleDateString("pt-BR"),hora:dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo:"Consulta médica",texto:evolucao,autor:"Dr. Silas Negrão — CRM-PB 17341",fonte:"dossie"};
-          const novasEvolucoes=[novaEv,...(pac?.evolucoes||[])];
-          up("evolucoes",novasEvolucoes);
-          dbSalvarPaciente({...pac,evolucoes:novasEvolucoes});
-          addMsg&&addMsg("Médico","Equipe","✅ Evolução do dossiê salva: "+(pac?.nome||"paciente")+".","msg");
-          return true;
-        }}/>}
+        {pronTab==="timeline"&&<div style={sc_.card()}><h3 style={{color:N,fontWeight:900,fontSize:14,marginBottom:12}}>🕒 Linha do Tempo — Exames e Evoluções</h3><EvolutionTimeline
+          marcos={[
+            pac?.data_biopsia&&{tipo:"diagnostico",titulo:"Diagnóstico / Biópsia",descricao:[pac?.diag,pac?.estadio&&("Est. "+pac.estadio),pac?.cid].filter(Boolean).join(" · ")||undefined,data:pac.data_biopsia},
+            pac?.trat&&pac?.data_sol&&{tipo:"inicio_qt",titulo:"Início do Tratamento",descricao:pac.trat,data:pac.data_sol},
+            dossieOncologico?.apac?.salvaEm&&{tipo:"apac",titulo:"APAC Emitida",data:dossieOncologico.apac.salvaEm},
+          ].filter(Boolean)}
+          exams={[...(pac?.exames_imagem||[]),...((dossieOncologico?.documentos||[]).filter(d=>d?.criadoEm||d?.data).map(d=>({nome:d.tipo||d.nome||"Documento",resumo:d.resumo||d.conteudo||"",criadoEm:d.criadoEm||d.data,origem:d.origem||"pipeline"})))]}
+          triages={(pac?.evolucoes||[]).map(e=>{
+            let dataHora;
+            try{const [d,m,y]=(e.data||"01/01/2020").split("/");dataHora=new Date(`${y}-${m}-${d}T${e.hora||"00:00"}:00`).toISOString();}catch(_){dataHora=new Date().toISOString();}
+            return {id:e.id||String(Date.now()),__source:"evolucao",dataHora,tipo:e.tipo||"consulta",enfermeiroNome:e.autor||"Médico",queixaAtual:e.texto,sinaisAlarme:[],qtLiberada:null};
+          }).concat((triagens||[]).map(t=>({...t,__source:"triagem"})))} onDelete={apagarItemTimeline}/></div>}
+        {pronTab==="consulta"&&<ProntuarioDossieUnico pac={pac} dossie={dossieOncologico} setDossie={setDossieGuardado} up={up} addMsg={addMsg} onAbrirAPAC={()=>setMedTab("apac")} tipoConsulta={pac?.tipoAtendimento||""} onSalvarEvolucao={(evolucao)=>salvarEvolucaoAssinada(evolucao,{origem:"Salvar evolução do dossiê",tipo:"Consulta médica",fonte:"dossie",msgDe:"Médico",msgTexto:"✅ Evolução do dossiê salva: "+(pac?.nome||"paciente")+"."})}/>}
         {pronTab==="__dados_hidden"&&<div style={{display:"grid",gap:14}}>
         <div style={sc_.card()}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -615,7 +858,7 @@ export default function App(){
         {pac?.docs_ia_resumo&&<div style={sc_.card()}><H2 ch="📋 Documentos Processados pela IA"/><Cbox text={pac.docs_ia_resumo} maxH={300}/></div>}
       </div>;
       case "receitas": return <div style={{display:"grid",gap:12}}><PrescreverDoenca pac={pac}/><ReceitasComp pac={pac} addCaixaEntrada={addCaixaEntrada} addMsg={addMsg}/></div>;
-      case "apac": return <div style={{display:"grid",gap:14}}><StatusDossieBar dossie={dossieOncologico}/><APACDossieChecklist dossie={dossieOncologico} setDossie={setDossieGuardado}/><APACEntradaRapida pac={pac} up={up} dossie={dossieOncologico} setDossie={setDossieGuardado} addMsg={addMsg}/><APACSystem pac={{...pac,...(dossieOncologico?.apac?.campos||{})}} up={up} addMsg={addMsg} apacs={apacs} setApacs={setApacs}/></div>;
+      case "apac": return <div style={{display:"grid",gap:14}}><StatusDossieBar dossie={dossieOncologico}/><APACClinicalTools pac={pac} up={up} dossie={dossieOncologico} setDossie={setDossieGuardado} addMsg={addMsg}/><APACDossieChecklist dossie={dossieOncologico} setDossie={setDossieGuardado}/><APACEntradaRapida pac={pac} up={up} dossie={dossieOncologico} setDossie={setDossieGuardado} addMsg={addMsg}/><APACSystem pac={{...pac,...(dossieOncologico?.apac?.campos||{})}} up={up} addMsg={addMsg} apacs={apacs} setApacs={setApacs}/></div>;
       case "balanco": return <GraficoProducao/>;
       case "salao": return <SalaoMedico timers={timers} addMsg={addMsg} setEmergenciaAtiva={setEmergenciaAtiva}/>;
       case "consultas_dia": return <div style={{display:"grid",gap:12}}>
@@ -626,20 +869,14 @@ export default function App(){
       case "comunicacoes": return <DashboardComunicacao/>;
       case "ia_hub": return <IAHubComp pac={pac} addMsg={addMsg}/>;
       case "ia_agent": return <AssistenteIA pac={pac} up={up} addMsg={addMsg} funcLogado={funcLogado} onSalvarEvolucao={(evolucao)=>{
-        if(!executarProntuarioSecurity({pac,texto:evolucao,dossie:dossieOncologico,origem:"Assistente IA"},addMsg))return false;
-        const dt=new Date();
-        const novaEv={id:Date.now(),data:dt.toLocaleDateString("pt-BR"),hora:dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo:"Assistente IA",texto:evolucao,autor:"Dr. Silas Negrão — CRM-PB 17341",fonte:"ia"};
-        const novasEvolucoes=[novaEv,...(pac?.evolucoes||[])];
-        up("evolucoes",novasEvolucoes);
-        dbSalvarPaciente({...pac,evolucoes:novasEvolucoes});
-        addMsg&&addMsg("🤖 IA","Médico","✅ Documento gerado e enviado ao prontuário de "+(pac?.nome||"paciente")+".","msg");
-        setMedTab("prontuario");
-        return true;
+        const ok=salvarEvolucaoAssinada(evolucao,{origem:"Assistente IA",tipo:"Assistente IA",fonte:"ia",msgDe:"🤖 IA",msgTexto:"✅ Documento gerado e enviado ao prontuário de "+(pac?.nome||"paciente")+"."});
+        if(ok)setMedTab("prontuario");
+        return ok;
       }}/>;
       case "oncoagent": return <BancadaOncologica pac={pac} apiUrl={(import.meta.env.VITE_API_URL||"http://127.0.0.1:3001").replace(/\/$/,"")}/>;
       case "ia_test": return <IATestador pac={pac}/>;
       case "triagem_recebe": return <TriagemMedicoRecebe triagens={triagens} pac={pac} addMsg={addMsg} onEnviarDiscussao={t=>{setTriagemDiscussao(t);setMedTab("discussao_clinica");}} onValidar={(t,txt)=>{setDossieOncologico(d=>{const base=d||criarDossieInicial(pac);const doc={id:Date.now(),tipo:"Conduta triagem validada",nome:"Conduta validada — "+(t?.nome||pac?.nome||"paciente"),resumo:txt||t?.resumo||"Conduta validada.",origem:"medico_triagem",criadoEm:NOW(),triagemId:t?.id};const novo={...base,paciente:{...(base.paciente||{}),...pac},documentos:[doc,...(base.documentos||[])],status:"pronto_medico",updatedAt:NOW()};novo.evolucao={...(novo.evolucao||{}),rascunho:gerarTextoEvolucao(novo)};novo.apac=validarAPAC(novo);return novo;});}}/>;
-      case "discussao_clinica": return <DiscussaoClinicaIA pac={pac} dossie={dossieOncologico} triagens={triagens} triagemSelecionada={triagemDiscussao} addMsg={addMsg} onSalvar={(texto)=>{if(!executarProntuarioSecurity({pac,texto,dossie:dossieOncologico,origem:"Discussão clínica IA"},addMsg))return false;const dt=new Date();const novaEv={id:Date.now(),data:dt.toLocaleDateString("pt-BR"),hora:dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo:"Discussão clínica IA",texto,autor:"Dr. Silas Negrão — CRM-PB 17341",fonte:"ia_discussao"};const novasEvolucoes=[novaEv,...(pac?.evolucoes||[])];up("evolucoes",novasEvolucoes);dbSalvarPaciente({...pac,evolucoes:novasEvolucoes});setDossieOncologico(d=>{const base=d||criarDossieInicial(pac);const doc={id:Date.now()+1,tipo:"Discussão clínica IA",nome:"Discussão clínica — "+(pac?.nome||"paciente"),resumo:texto,origem:"ia_discussao",criadoEm:NOW()};const novo={...base,paciente:{...(base.paciente||{}),...pac},documentos:[doc,...(base.documentos||[])],status:"em_consulta",updatedAt:NOW()};novo.evolucao={...(novo.evolucao||{}),rascunho:gerarTextoEvolucao(novo)};novo.apac=validarAPAC(novo);return novo;});return true;}}/>;
+      case "discussao_clinica": return <DiscussaoClinicaIA pac={pac} dossie={dossieOncologico} triagens={triagens} triagemSelecionada={triagemDiscussao} addMsg={addMsg} onSalvar={(texto)=>salvarEvolucaoAssinada(texto,{origem:"Discussão clínica IA",tipo:"Discussão clínica IA",fonte:"ia_discussao",msgDe:"Discussão clínica IA",msgTexto:"✅ Discussão clínica salva no prontuário."})}/>;
       case "antiglosa": return <AntiGlosaComp pac={pac} up={up}/>;
       case "drive_ia": return <DriveIntegracaoComp pac={pac} up={up} addMsg={addMsg} dossie={dossieOncologico} setDossie={setDossieGuardado}/>;
       case "buscar": return <BuscarPacienteComp pac={pac} up={up} setPac={setPac} listaEspera={listaEspera} agendamentos={agendamentos} consultasDia={consultasDia} setMedTab={setMedTab} setPronTab={setPronTab} onAbrirPaciente={abrirAtendimento}/>;
@@ -658,13 +895,13 @@ export default function App(){
     {icon:"🤝",  title:"Assist. Social",sub:"Laudos · Benefícios · LOAS",  pg:"assistencia",bar1:"#7B1D3A",bar2:"#D4A017"},
     {icon:"🧑",  title:"Portal Paciente",sub:"Reações · Documentos",        pg:"paciente",  bar1:"#374151",bar2:"#B8860B"},
   ];
-  if(showAbertura) return <AberturaScreen onConcluir={()=>setShowAbertura(false)}/>;
+  if(showAbertura) return <AberturaScreen onConcluir={()=>React.startTransition(()=>setShowAbertura(false))}/>;
 
   // ── ROTAS NOVAS (preview) ────────────────────────────────────────────────────
   if(pg==="paciente_form") return (
     <div style={{minHeight:"100vh",background:"#F1F5F9"}}>
       <div style={{background:"#1B365D",padding:"10px 20px",display:"flex",alignItems:"center",gap:12}}>
-        <button onClick={()=>setPg("landing")} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,padding:"6px 12px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>← Voltar</button>
+        <button onClick={()=>React.startTransition(()=>setPg("landing"))} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:8,padding:"6px 12px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>← Voltar</button>
         <span style={{color:"rgba(255,255,255,.7)",fontSize:12}}>Seleção de Perfil → 1ª Consulta</span>
       </div>
       <PacienteDemograficoForm
@@ -760,9 +997,9 @@ export default function App(){
             novo.apac=validarAPAC(novo);
             return novo;
           });
-          addFila({nome:pacienteCompleto.nome,proto:"Cadastro demográfico",chegada:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),status:"aguardando_recepcao",origem:"paciente",pacID:pacienteCompleto.pacID});
+          addFila({...pacienteCompleto,proto:"Cadastro demográfico",chegada:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),status:"aguardando_recepcao",origem:"paciente"});
           addMsg("Paciente","Recepção","Cadastro demográfico enviado: "+(pacienteCompleto.nome||"paciente")+". Dados APAC preenchidos automaticamente.","msg");
-          setPg("recepcao");
+          React.startTransition(()=>setPg("recepcao"));
         }}
       />
     </div>
@@ -771,7 +1008,7 @@ export default function App(){
     <ConferenciaAPAC
       pac={pac}
       onSalvar={(apac)=>{ console.info("[APACApp] APAC salva via rota"); }}
-      onVoltar={()=>setPg("landing")}
+      onVoltar={()=>React.startTransition(()=>setPg("landing"))}
     />
   );
 
@@ -780,8 +1017,8 @@ export default function App(){
     <AppRoutes
       pac={pac}
       up={up}
-      chamarClaude={chamarClaude}
-      onVoltar={()=>{ if(typeof window!=="undefined") window.location.hash=""; setPg("landing"); }}
+      chamarClaude={createBoundClaude(pac,AGENT_INTENTS.EVOLUCAO)}
+      onVoltar={()=>{ if(typeof window!=="undefined") window.location.hash=""; React.startTransition(()=>setPg("landing")); }}
     />
   );
 
@@ -831,7 +1068,7 @@ export default function App(){
           {PERFIS_LANDING.map((b,i)=>(
             <div key={b.pg} className="lcard-v4"
               style={{background:"#fff",border:"1.5px solid #DDE3EC",borderRadius:16,overflow:"hidden",cursor:"pointer",boxShadow:"0 2px 10px rgba(13,31,60,.07)",animationDelay:`${i*0.07}s`}}
-              onClick={()=>setPg(b.pg)}
+              onClick={()=>React.startTransition(()=>setPg(b.pg))}
               onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-4px) scale(1.025)";e.currentTarget.style.boxShadow="0 14px 36px rgba(27,54,93,.18)";e.currentTarget.style.borderColor="#D4A017";}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 10px rgba(13,31,60,.07)";e.currentTarget.style.borderColor="#DDE3EC";}}>
               {/* Faixa colorida superior */}
@@ -844,7 +1081,7 @@ export default function App(){
             </div>
           ))}
         </div>
-        <APACDashboardWidget apacs={apacs} onAbrir={()=>{setPg("medico");setMedLogado(true);setMedTab("apac");}}/>
+        <APACDashboardWidget apacs={apacs} onAbrir={()=>React.startTransition(()=>{setPg("medico");setMedLogado(true);setMedTab("apac");})}/>
       </div>
 
       {/* Rodapé discreto */}
@@ -854,15 +1091,16 @@ export default function App(){
     </div>
   );
 
-  if(pg==="assistencia") return <AssistenciaSocialPage pac={pac} up={up} setPac={setPac} back={()=>setPg("landing")} laudoLiberado={laudoLiberado} setLaudoLiberado={setLaudoLiberado} alertCount={totalAl} onAlert={goAlerta}/>;
-  if(pg==="farmacia") return <FarmaciaPage pac={pac} cicloLiberado={cicloLiberado} setCicloLiberado={setCicloLiberado} mensagens={mensagens} addMsg={addMsg} back={()=>setPg("landing")} alertCount={totalAl} onAlert={goAlerta}/>;
-  if(pg==="recepcao") return <RecepcaoPage pac={pac} up={up} setPac={setPac} setPg={setPg} listaEspera={listaEspera} setListaEspera={setListaEspera} addFila={addFila} agendamentos={agendamentos} addAgendamento={addAgendamento} funcLogado={funcLogado} mensagens={mensagens} addMsg={addMsg} alertCount={totalAl} onAlert={goAlerta} dossie={dossieOncologico} setDossie={setDossieGuardado} onEnviar={(destino="prontuario")=>{
+  if(pg==="assistencia") return <AssistenciaSocialPage pac={pac} up={up} setPac={setPac} back={()=>React.startTransition(()=>setPg("landing"))} laudoLiberado={laudoLiberado} setLaudoLiberado={setLaudoLiberado} alertCount={totalAl} onAlert={goAlerta}/>;
+  if(pg==="farmacia") return <FarmaciaPage pac={pac} cicloLiberado={cicloLiberado} setCicloLiberado={setCicloLiberado} mensagens={mensagens} addMsg={addMsg} back={()=>React.startTransition(()=>setPg("landing"))} alertCount={totalAl} onAlert={goAlerta}/>;
+  if(pg==="recepcao") return <RecepcaoPage pac={pac} up={up} setPac={setPac} setPg={setPg} listaEspera={listaEspera} setListaEspera={setListaEspera} addFila={addFila} agendamentos={agendamentos} addAgendamento={addAgendamento} funcLogado={funcLogado} mensagens={mensagens} addMsg={addMsg} alertCount={totalAl} onAlert={goAlerta} dossie={dossieOncologico} setDossie={setDossieGuardado} onEnviar={(destino="prontuario", extras={})=>{
     const pacientePronto={...pac,status:"pronto_medico",pacID:pac.pacID||genPacID()};
     dbSalvarPaciente(pacientePronto);
     savePacAtual(pacientePronto);
     setPac(pacientePronto);
     // F0 — recepção cria encounter como draft; médico vai validar
-    openEncounter(createEncounter(pacientePronto.pacID, _inferirTipoEncounter(pacientePronto)));
+    {const encResult=openEncounter(createEncounter(pacientePronto.pacID, _inferirTipoEncounter(pacientePronto)));
+    if(!encResult.ok){addMsg("Sistema","Médico","⚠️ ATENÇÃO: Não foi possível registrar o atendimento (recepção). "+encResult.reason,"alerta");}}
     setDossieOncologico(d=>{
       const base=d&&mesmoPacienteDossie(d,pacientePronto)?d:criarDossieInicial(pacientePronto);
       const novo=orquestrarDossieAtendimento({...base,paciente:{...(base.paciente||{}),...pacientePronto},status:"recepcao_conferencia",updatedAt:NOW()},"recepcao_confirmacao");
@@ -875,13 +1113,34 @@ export default function App(){
       return existe?x.map(p=>((p.pacID&&p.pacID===pacientePronto.pacID)||p.nome===pacientePronto.nome)?{...p,...item}:p):[item,...x];
     });
     addMsg("Recepção","Médico",`Prontuário pronto: ${pacientePronto.nome||"paciente"}${pacientePronto.queixa?` — Queixa: ${pacientePronto.queixa}`:""}. ${destino==="modulos_v11"?"Abrindo módulos v1.1 dentro da aba médica.":"Abrindo direto na evolução médica."}`,"standby");
-    setPg("medico");setMedLogado(true);
-    setMedTab("prontuario");setPronTab("consulta");
-    if(destino==="modulos_v11")setMedTab2("modulos_v11");
-    else {setMedTab2("prontuario");setPronTab2("evolucao");}
+    // Emite dados da recepção para entradasStore (Orquestrador v1.1)
+    if(destino==="modulos_v11"){
+      const _pKey=chavePaciente(pacientePronto);
+      if(_pKey){
+        const _payload={};
+        const _CAMPOS_LAUDO=["anatom","imagen","exames_resumo","obs_ia","docs_ia_resumo","local_cancer","diag","cid","tnm","estadio","ecog","bio","trat","linha","intencao","grau_hist","subtipo","margens","data_biopsia","queixa","queixa_principal","antec","meds","alerg","anam_hist_fam","peso","altura","sc","necessita_tfd","necessita_transporte","necessita_assist_social","acompanhante_nome","cidade_origem"];
+        _CAMPOS_LAUDO.forEach(k=>{if(pacientePronto[k])_payload[k]=pacientePronto[k];});
+        if(extras?.textoColar)_payload.textoColar=extras.textoColar;
+        if(Object.keys(_payload).length>0){
+          try{
+            const _entrada=criarEntradaDado({origem:"recepcao",rota:"/recepcao/confirmacao",pacienteKey:_pKey,payload:_payload,ator:"Recepção"});
+            const _raw=localStorage.getItem("apacapp_entradas_v117");
+            const _arr=_raw?JSON.parse(_raw):[];
+            _arr.push(_entrada);
+            localStorage.setItem("apacapp_entradas_v117",JSON.stringify(_arr.slice(-200)));
+          }catch(_e){console.warn("[entradasStore] falha ao emitir dados da recepção:",_e);}
+        }
+      }
+    }
+    React.startTransition(()=>{
+      setPg("medico");setMedLogado(true);
+      setMedTab("prontuario");setPronTab("consulta");
+      if(destino==="modulos_v11")setMedTab2("modulos_v11");
+      else {setMedTab2("prontuario");setPronTab2("evolucao");}
+    });
   }} extrairCamposIA={extrairCamposIA} extrairEvolucaoIA={extrairEvolucaoIA} extrairExamesRealizadosTexto={extrairExamesRealizadosTexto} criarDossieInicial={criarDossieInicial} orquestrarDossieAtendimento={orquestrarDossieAtendimento} apiUrl={_apiUrl}/>;
-  if(pg==="enfermagem") return <EnfermagemPage pac={pac} mensagens={mensagens} addMsg={addMsg} addHistQT={addHistQT} back={()=>setPg("landing")} alertCount={totalAl} onAlert={goAlerta} onNovaTriagem={t=>{setTriagens(x=>[t,...x]);setDossieOncologico(d=>{const base=d||criarDossieInicial(pac);const condutas=t?.condutas?.length?t.condutas:condutasDeResumoTriagem(t?.resumo||"",t?.alarmes||[]);const doc={id:Date.now(),tipo:"Triagem enfermagem",nome:"Triagem QT — "+(t?.nome||pac?.nome||"paciente"),resumo:t?.resumo||t?.conclusao||"Resumo de triagem recebido.",origem:"enfermagem",criadoEm:NOW(),condutas,alarmes:t?.alarmes||[]};const novo={...base,paciente:{...(base?.paciente||{}),...pac},documentos:[doc,...(base?.documentos||[])],status:"pronto_medico",updatedAt:NOW()};novo.evolucao={...(novo.evolucao||{}),rascunho:gerarTextoEvolucao(novo)};novo.apac=validarAPAC(novo);return novo;});}}/>;
-  if(pg==="comunicacao") return <ComunicacaoPage mensagens={mensagens} addMsg={addMsg} back={()=>setPg("landing")} alertCount={totalAl} onAlert={goAlerta}/>;
+  if(pg==="enfermagem") return <EnfermagemPage pac={pac} mensagens={mensagens} addMsg={addMsg} addHistQT={addHistQT} back={()=>React.startTransition(()=>setPg("landing"))} alertCount={totalAl} onAlert={goAlerta} onNovaTriagem={t=>{setTriagens(x=>[t,...x]);setDossieOncologico(d=>{const base=d||criarDossieInicial(pac);const condutas=t?.condutas?.length?t.condutas:condutasDeResumoTriagem(t?.resumo||"",t?.alarmes||[]);const doc={id:Date.now(),tipo:"Triagem enfermagem",nome:"Triagem QT — "+(t?.nome||pac?.nome||"paciente"),resumo:t?.resumo||t?.conclusao||"Resumo de triagem recebido.",origem:"enfermagem",criadoEm:NOW(),condutas,alarmes:t?.alarmes||[]};const novo={...base,paciente:{...(base?.paciente||{}),...pac},documentos:[doc,...(base?.documentos||[])],status:"pronto_medico",updatedAt:NOW()};novo.evolucao={...(novo.evolucao||{}),rascunho:gerarTextoEvolucao(novo)};novo.apac=validarAPAC(novo);return novo;});}}/>;
+  if(pg==="comunicacao") return <ComunicacaoPage mensagens={mensagens} addMsg={addMsg} back={()=>React.startTransition(()=>setPg("landing"))} alertCount={totalAl} onAlert={goAlerta}/>;
 
   if(pg==="medico"&&!medLogado) return (
     <div style={{minHeight:"100vh",background:"#F5F7FA",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',Arial,sans-serif",padding:20}}>
@@ -891,8 +1150,8 @@ export default function App(){
           <div style={{background:"linear-gradient(135deg,#B8860B,#D4A017)",borderRadius:16,width:64,height:64,display:"grid",placeItems:"center",margin:"0 auto 14px",fontSize:28,boxShadow:"0 4px 14px rgba(184,134,11,.35)"}}>👨‍⚕️</div>
           <h2 style={{color:"#0A0F1E",fontWeight:900,fontSize:18,margin:"0 0 6px"}}>Acesso Médico</h2>
           <p style={{color:"#6B7280",fontSize:13,marginBottom:22}}>Módulo clínico — Dr. Silas Negrão Serra Jr.</p>
-          <button onClick={()=>setMedLogado(true)} style={{width:"100%",padding:"12px 0",background:"linear-gradient(135deg,#B8860B,#D4A017)",border:"none",borderRadius:10,color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",boxShadow:"0 3px 12px rgba(184,134,11,.35)",marginBottom:10}}>Entrar →</button>
-          <button onClick={()=>setPg("landing")} style={{width:"100%",padding:"10px 0",background:"transparent",border:"1.5px solid #DDE3EC",borderRadius:10,color:"#374151",fontWeight:600,fontSize:13,cursor:"pointer"}}>← Voltar ao Início</button>
+          <button onClick={()=>React.startTransition(()=>setMedLogado(true))} style={{width:"100%",padding:"12px 0",background:"linear-gradient(135deg,#B8860B,#D4A017)",border:"none",borderRadius:10,color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",boxShadow:"0 3px 12px rgba(184,134,11,.35)",marginBottom:10}}>Entrar →</button>
+          <button onClick={()=>React.startTransition(()=>setPg("landing"))} style={{width:"100%",padding:"10px 0",background:"transparent",border:"1.5px solid #DDE3EC",borderRadius:10,color:"#374151",fontWeight:600,fontSize:13,cursor:"pointer"}}>← Voltar ao Início</button>
         </div>
       </div>
     </div>
@@ -922,11 +1181,14 @@ export default function App(){
     if(pacFluxo==="primeira") return <PrimConsultaPaciente pac={pac} up={up} addMsg={_addMsg2} addCaixa={_addCaixa} addFila={_addFila} onDossieCriado={(entrada)=>{
       // Mescla dados do paciente; mapeia local_cancer → diag e cid_sugerido → cid
       const ep=entrada.paciente||{};
+      const statusEntrada=entrada.status||ep.status||"aguardando_recepcao";
       const sedeCID=getCIDPorSede(ep.local_cancer||ep.local_cancer);
       const diagAuto=ep.diag||ep.local_cancer||(sedeCID?.sede?"Neoplasia de "+sedeCID.sede:"")||"";
       const cidAuto=ep.cid||ep.cid_sugerido||sedeCID?.cid||getCID(diagAuto)||"";
       const pacMesclado={
         ...pac,...ep,
+        pacID:ep.pacID||pac.pacID||genPacID(),
+        status:statusEntrada,
         // Campos clínicos: dados do paciente (ep) têm prioridade sobre valores antigos (pac)
         diag:diagAuto||pac.diag||"",
         cid:cidAuto||pac.cid||"",
@@ -982,7 +1244,7 @@ export default function App(){
     }} onConcluido={()=>setPacFluxo(null)} back={()=>setPacFluxo(null)} alertCount={totalAl} onAlert={goAlerta}/>;
     const sinsSel2=SINAIS_T.filter(s=>sinPac.includes(s.id));
     const emerg2=sinsSel2.some(s=>s.n==="verm");const atenc2=!emerg2&&sinsSel2.some(s=>s.n==="amar");
-    const PT=[{id:"reacoes",l:"⚡ Reações"},{id:"inbox",l:`📬 Msg${_caixa.filter(m=>!m.lida).length>0?" ("+_caixa.filter(m=>!m.lida).length+")":""}`},{id:"carteirinha",l:"🪪 Carteirinha"},{id:"segunda_via",l:"📄 2ª Via"},{id:"enviar_exames",l:"📤 Enviar Exame"},{id:"videos",l:"🎬 Vídeos"}];
+    const PT=[{id:"reacoes",l:"⚡ Reações"},{id:"inbox",l:`📬 Msg${_caixa.filter(m=>!m.lida).length>0?" ("+_caixa.filter(m=>!m.lida).length+")":""}`},{id:"carteirinha",l:"🪪 Carteirinha"},{id:"segunda_via",l:"📂 Documentos"},{id:"enviar_exames",l:"📤 Enviar Exame"},{id:"videos",l:"🎬 Vídeos"}];
     return (
       <div style={{minHeight:"100vh",background:BG,display:"flex",flexDirection:"column",fontFamily:"Georgia,serif"}}>
         <TopBar title="Portal do Paciente" back={()=>setPacFluxo(null)} alertCount={totalAl} onAlert={goAlerta}/>
@@ -1015,9 +1277,94 @@ export default function App(){
           </>}/>}
           {pacTab==="inbox"&&<InboxPaciente pacID={_pacID} pac={pac} caixa={_caixa} setCaixa={setCaixaEntrada} mensagens={_mensagens2} addMsg={_addMsg2}/>}
           {pacTab==="carteirinha"&&<div style={{display:"grid",gap:12}}><CarteirinhaNova pac={pac}/><CarteirinhaTab pac={pac} pacID={_pacID} histQT={historicoQTPaciente} addFila={_addFila}/></div>}
-          {pacTab==="segunda_via"&&<SegundaViaTab pac={pac} addCaixaEntrada={_addCaixa} laudoLiberado={_laudoLib}/>}
+          {pacTab==="segunda_via"&&<KitDocumentosComp pac={pac}/>}
           {pacTab==="enviar_exames"&&<div style={sc_.card()}><H2 ch="📤 Enviar Exames ao Médico"/><p style={{color:"#64748B",fontSize:12,marginBottom:10}}>Todos os documentos são revisados pela IA antes de chegar ao médico.</p><UploadComIA pac={pac} up={up} addMsg={_addMsg2} destino="prontuario" origem="Paciente" onConcluido={()=>alert("✅ Documento enviado! O médico receberá um resumo gerado pela IA.")}/></div>}
           {pacTab==="videos"&&<VideosYouTube/>}
+        </div>
+      </div>
+    );
+  }
+
+  // ── UploadSetorPanel — Labs / Radio: upload de laudos com link ao setor ─────
+  function UploadSetorPanel({ setor, pac, up, addMsg, adicionarDocumentoPadraoDossie, onVoltar }) {
+    const isLabs  = setor === "labs";
+    const cfg = isLabs
+      ? { titulo:"Laboratório", ico:"🧪", cor:"#1D4ED8", bg:"#EFF6FF", border:"#3B82F6", linkLabel:"Abrir sistema LIS", linkHref:"https://lis.hospitaldabem.com.br", descricao:"Envio de hemogramas, bioquímica, marcadores tumorais e laudos analíticos." }
+      : { titulo:"Radiologia",  ico:"📡", cor:"#15803D", bg:"#F0FDF4", border:"#22C55E", linkLabel:"Abrir sistema RIS", linkHref:"https://ris.hospitaldabem.com.br", descricao:"Envio de tomografias, ressonâncias, PET-CT, mamografias e laudos de imagem." };
+    const outroCfg = isLabs
+      ? { titulo:"Radiologia",  ico:"📡", cor:"#15803D", bg:"#F0FDF4", border:"#22C55E" }
+      : { titulo:"Laboratório", ico:"🧪", cor:"#1D4ED8", bg:"#EFF6FF", border:"#3B82F6" };
+
+    const handleAnalisar = async (_formData, payload = {}) => {
+      try {
+        if (adicionarDocumentoPadraoDossie) {
+          const nome = payload.arquivos?.map(f => f.name).join(", ") || "Laudo";
+          const texto = payload.textoLivre || "";
+          adicionarDocumentoPadraoDossie(texto || "Laudo recebido.", { tipo: cfg.titulo, arquivos: [{ n: nome, tipo: setor }] }, setor === "labs" ? "medico_upload" : "medico_upload");
+        }
+        addMsg && addMsg(cfg.titulo, "Médico", `Laudo de ${cfg.titulo} recebido e adicionado ao prontuário.`, "msg");
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    return (
+      <div style={{ display:"grid", gap:16, maxWidth:900 }}>
+        {/* Cabeçalho */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+          <div>
+            <div style={{ fontSize:11, fontWeight:950, color:"#64748B", textTransform:"uppercase", letterSpacing:1 }}>Upload de laudos</div>
+            <div style={{ fontSize:26, fontWeight:950, color:"#0F172A", lineHeight:1.1 }}>{cfg.ico} {cfg.titulo}</div>
+            <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>{cfg.descricao}</div>
+          </div>
+          {onVoltar && (
+            <button onClick={onVoltar} style={{ border:"1px solid #DDE3EC", background:"#F8FAFC", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:800, cursor:"pointer", fontFamily:"inherit", color:"#475569", whiteSpace:"nowrap" }}>← Voltar</button>
+          )}
+        </div>
+
+        {/* Caixa única seguindo layout de cards */}
+        <div style={{ border:"1px solid #DDE3EC", borderRadius:14, overflow:"hidden", background:"#fff", boxShadow:"0 2px 12px rgba(15,23,42,.05)" }}>
+
+          {/* Linha 1: cards iconográficos — setor ativo + outro setor */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:0, borderBottom:"1px solid #DDE3EC" }}>
+            {/* Card setor ativo */}
+            <div style={{ background:cfg.bg, borderRight:"1px solid #DDE3EC", padding:"20px 24px", display:"flex", flexDirection:"column", gap:10, alignItems:"flex-start" }}>
+              <div style={{ fontSize:40, lineHeight:1 }}>{cfg.ico}</div>
+              <div>
+                <div style={{ fontSize:16, fontWeight:950, color:cfg.cor, letterSpacing:.2 }}>{cfg.titulo}</div>
+                <div style={{ fontSize:11, color:cfg.cor+"AA", marginTop:2 }}>Setor ativo — envie laudos abaixo</div>
+              </div>
+              <a
+                href={cfg.linkHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display:"inline-flex", alignItems:"center", gap:5, background:cfg.cor, color:"#fff", borderRadius:8, padding:"7px 12px", fontSize:11, fontWeight:900, textDecoration:"none", marginTop:4 }}
+              >
+                🔗 {cfg.linkLabel}
+              </a>
+            </div>
+
+            {/* Card outro setor */}
+            <div style={{ background:outroCfg.bg, padding:"20px 24px", display:"flex", flexDirection:"column", gap:10, alignItems:"flex-start", opacity:.72 }}>
+              <div style={{ fontSize:40, lineHeight:1 }}>{outroCfg.ico}</div>
+              <div>
+                <div style={{ fontSize:16, fontWeight:950, color:outroCfg.cor, letterSpacing:.2 }}>{outroCfg.titulo}</div>
+                <div style={{ fontSize:11, color:outroCfg.cor+"AA", marginTop:2 }}>Clique para acessar</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Linha 2: área de upload */}
+          <div style={{ padding:"18px 20px", background:"#FAFBFC" }}>
+            <div style={{ fontSize:11, fontWeight:950, color:"#64748B", textTransform:"uppercase", letterSpacing:.8, marginBottom:10 }}>
+              Enviar laudo — arquivo, colar texto ou arrastar
+            </div>
+            <UploadSimples
+              pacienteId={pac?.pacID || pac?.cpf || ""}
+              onAnalisar={handleAnalisar}
+              titulo={`Laudos de ${cfg.titulo}`}
+            />
+          </div>
         </div>
       </div>
     );
@@ -1053,7 +1400,7 @@ export default function App(){
         };
         const r=await fetch(_apiUrl()+"/api/dossie/drive",{
           method:"POST",
-          headers:{"Content-Type":"application/json"},
+          headers:_backendHeaders(),
           body:JSON.stringify(payload),
         });
         const data=await r.json().catch(()=>({}));
@@ -1155,7 +1502,7 @@ export default function App(){
               style={{background:buscandoDrive?'#94A3B8':'linear-gradient(135deg,#1B365D,#2756A0)',color:'#fff',border:'none',borderRadius:10,padding:'10px 16px',fontSize:13,fontWeight:900,cursor:buscandoDrive?'wait':'pointer',fontFamily:'inherit'}}>
               {buscandoDrive ? 'Processando Drive...' : 'Buscar no Drive e gerar resumo'}
             </button>
-            <button onClick={()=>setMedTab2('prontuario')} style={{background:'#F8FAFC',border:'1px solid #DDE3EC',borderRadius:10,padding:'10px 14px',fontSize:12,color:'#1B365D',fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>Abrir evolução</button>
+            <button onClick={()=>goTab('prontuario')} style={{background:'#F8FAFC',border:'1px solid #DDE3EC',borderRadius:10,padding:'10px 14px',fontSize:12,color:'#1B365D',fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>Abrir evolução</button>
           </div>
           {erroDrive&&<div style={{marginTop:10,background:'#FCE8EF',border:'1px solid #7B1D3A44',borderRadius:8,padding:'8px 10px',fontSize:12,color:'#7B1D3A',fontWeight:800}}>{erroDrive}</div>}
           {resumoDrive&&<div style={{marginTop:12,background:'#F8FAFC',border:'1px solid #DDE3EC',borderRadius:10,padding:12}}>
@@ -1175,7 +1522,7 @@ export default function App(){
   }
 
   // ── renderMedico2: 7 tabs v4 com AppShell ─────────────────────────────────
-  const goDashV4=(id)=>{
+  const goDashV4=(id)=>React.startTransition(()=>{
     if(id==="dashboard"||id==="alertas")return setMedTab2("dashboard");
     if(id==="pacientes"||id==="buscar_paciente")return setMedTab2("pacientes");
     if(id==="triagem_recebe"||id==="enfermagem_triagem"){setMedTab2("enfermagem");setEnfermagemTab2("triagem");return;}
@@ -1187,10 +1534,12 @@ export default function App(){
     if(id==="receitas"){setMedTab2("prontuario");setPronTab2("receitas");return;}
     if(id==="exames_med"||id==="exames")return setMedTab2("upload_modulo");
     if(id==="upload_modulo")return setMedTab2("upload_modulo");
+    if(id==="labs_upload")return setMedTab2("labs_upload");
+    if(id==="radio_upload")return setMedTab2("radio_upload");
     if(id==="concluir_atendimento"||id==="novo_atendimento")return setMedTab2(id);
     if(id==="prontuario"){setMedTab2("prontuario");setPronTab2("evolucao");return;}
     if(id==="apac")return setMedTab2("apac");
-    if(id==="ia"||id==="ia_hub")return setMedTab2("ia");
+    if(id==="ia"||id==="ia_hub"){setMedTab2("prontuario");setPronTab2("evolucao");return;}
     if(id==="modulos"||id==="modulos_v11")return setMedTab2("upload_modulo");
     if(id==="salao"||id==="stats"||id==="agenda_med"||id==="config"||id==="balanco"){
       setMedTab2("admin");
@@ -1198,29 +1547,42 @@ export default function App(){
       return;
     }
     setMedTab2("fila");
-  };
-  const atendimentosMedicos=[
-    ...(listaEspera||[]).map(p=>({...p,status:p.status||"aguardando",proto:p.proto||p.trat||"Primeira consulta"})),
-    ...(consultasDia||[])
-  ];
-
+  });
   const renderMedico2=()=>{
     switch(medTab2){
-      case "dashboard": return <DashboardMedico pac={pac} consultasDia={atendimentosMedicos} alertas={MOCK_ALERTAS} mensagens={mensagens} setMedTab={goDashV4} caixaEntrada={caixaEntrada} agendamentos={agendamentos} onAbrirAtendimento={(p)=>{abrirAtendimento(p);setMedTab2("prontuario");setPronTab2("evolucao");}}/>;
-      case "fila": return <FilaDiaMedico consultasDia={atendimentosMedicos} alertas={MOCK_ALERTAS} setMedTab={goDashV4} onAbrirAtendimento={(p)=>{abrirAtendimento(p);setMedTab2("prontuario");setPronTab2("evolucao");}}/>;
-      case "pacientes": return <GerenciarPacientes onAbrirPaciente={p=>{abrirAtendimento(p);setMedTab2("prontuario");setPronTab2("evolucao");}} onNovoPaciente={p=>{const np={...PAC0,...p,pacID:p?.pacID||genPacID()};setPac(np);savePacAtual(np);setDossieOncologico(criarDossieInicial(np));setMedTab2("prontuario");setPronTab2("evolucao");}}/>;
-      case "upload_modulo": return <UploadModuloComp pac={pac} up={up} addMsg={addMsg} chamarClaude={chamarClaude} dossieOncologico={dossieOncologico} setDossieOncologico={setDossieOncologico} adicionarDocumentoPadraoDossie={adicionarDocumentoPadraoDossie} setMedTab2={setMedTab2}/>;
+      case "dashboard": return <DashboardMedico pac={pac} consultasDia={atendimentosMedicos} alertas={MOCK_ALERTAS} mensagens={mensagens} setMedTab={goDashV4} caixaEntrada={caixaEntrada} agendamentos={agendamentos} onAbrirAtendimento={(p)=>React.startTransition(()=>{abrirAtendimento(p);setMedTab2("prontuario");setPronTab2("evolucao");})}/>;
+      case "fila": return <FilaDiaMedico consultasDia={atendimentosMedicos} alertas={MOCK_ALERTAS} setMedTab={goDashV4} onAbrirAtendimento={(p)=>React.startTransition(()=>{abrirAtendimento(p);setMedTab2("prontuario");setPronTab2("evolucao");})}/>;
+      case "pacientes": return <GerenciarPacientes onAbrirPaciente={p=>React.startTransition(()=>{abrirAtendimento(p);setMedTab2("prontuario");setPronTab2("evolucao");})} onNovoPaciente={p=>React.startTransition(()=>{const np={...PAC0,...p,pacID:p?.pacID||genPacID()};setPac(np);savePacAtual(np);setDossieOncologico(criarDossieInicial(np));setMedTab2("prontuario");setPronTab2("evolucao");})}/>;
+      case "upload_modulo": return <UploadModuloComp pac={pac} up={up} addMsg={addMsg} chamarClaude={createBoundClaude(pac,AGENT_INTENTS.RESUMO_LAUDO)} dossieOncologico={dossieOncologico} setDossieOncologico={setDossieOncologico} adicionarDocumentoPadraoDossie={adicionarDocumentoPadraoDossie} setMedTab2={setMedTab2}/>;
+      case "labs_upload": return <UploadSetorPanel setor="labs" pac={pac} up={up} addMsg={addMsg} adicionarDocumentoPadraoDossie={adicionarDocumentoPadraoDossie} onVoltar={()=>setMedTab2("fila")}/>;
+      case "radio_upload": return <UploadSetorPanel setor="radio" pac={pac} up={up} addMsg={addMsg} adicionarDocumentoPadraoDossie={adicionarDocumentoPadraoDossie} onVoltar={()=>setMedTab2("fila")}/>;
       case "concluir_atendimento":
-      case "novo_atendimento": return <AtendimentoSegurancaPanel pac={pac} dossie={dossieOncologico} onConcluir={concluirAtendimentoAtual} onNovo={novoAtendimentoLimpo} onLimparTestes={limparDadosTeste}/>;
+      case "novo_atendimento": return <AtendimentoSegurancaPanel pac={pac} dossie={dossieOncologico} onConcluir={concluirAtendimentoAtual} onNovo={novoAtendimentoLimpo} onLimparTestes={limparDadosTeste} onZerarTudo={zerarTodosAtendimentosLocais}/>;
       case "prontuario": return(
         <div>
           {aiPatches.length>0&&<div style={{marginBottom:12}}><ReviewBanner patches={aiPatches} onApply={({approvedFields,patchId})=>{approvedFields.forEach(({field,value})=>up&&up(field,value));setAiPatches(x=>x.filter(p=>p.id!==patchId));}} onDismiss={()=>setAiPatches([])}/></div>}
-          <SubTabsV4 tabs={[{id:"evolucao",ico:"📝",label:"Evolução"},{id:"receitas",ico:"📄",label:"Receitas"},{id:"timeline",ico:"🕒",label:"Timeline"}]} active={["drive","exames"].includes(pronTab2)?"evolucao":pronTab2} onChange={setPronTab2}/>
-          {["evolucao","drive","exames"].includes(pronTab2)&&<StepperMedico pac={pac} dossie={dossieOncologico} setDossie={setDossieGuardado} up={up} addMsg={addMsg} onAbrirAPAC={()=>setMedTab2("apac")} onLimpar={()=>{if(window.confirm("Limpar atendimento?")){const np={...PAC0,pacID:genPacID()};setPac(np);clearPacAtual?.();setDossieOncologico(criarDossieInicial(np));}}} onSalvarEvolucao={(evolucao)=>{if(!executarProntuarioSecurity({pac,texto:evolucao,dossie:dossieOncologico,origem:"Salvar evolução do dossiê"},addMsg))return false;const dt=new Date();const nv={id:Date.now(),data:dt.toLocaleDateString("pt-BR"),hora:dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo:"Consulta médica",texto:evolucao,autor:"Dr. Silas Negrão — CRM-PB 17341",fonte:"dossie"};const ne=[nv,...(pac?.evolucoes||[])];up("evolucoes",ne);dbSalvarPaciente({...pac,evolucoes:ne});addMsg&&addMsg("Médico","Equipe","✅ Evolução salva.","msg");return true;}}/> }
+          <SubTabsV4 tabs={[{id:"evolucao",ico:"📝",label:"Evolução"},{id:"receitas",ico:"📂",label:"Documentos"},{id:"timeline",ico:"🕒",label:"Timeline"}]} active={["drive","exames"].includes(pronTab2)?"evolucao":pronTab2} onChange={setPronTab2}/>
+          {["evolucao","drive","exames"].includes(pronTab2)&&<StepperMedico pac={pac} dossie={dossieOncologico} setDossie={setDossieGuardado} up={up} addMsg={addMsg} onAbrirAPAC={()=>setMedTab2("apac")} onLimpar={()=>{if(window.confirm("Limpar atendimento?")){const np={...PAC0,pacID:genPacID()};setPac(np);clearPacAtual?.();setDossieOncologico(criarDossieInicial(np));}}} onSalvarEvolucao={(evolucao)=>salvarEvolucaoAssinada(evolucao,{origem:"Salvar evolução do dossiê",tipo:"Consulta médica",fonte:"dossie",msgDe:"Médico",msgTexto:"✅ Evolução salva."})}/> }
           {pronTab2==="drive"&&<DriveIntegracaoComp pac={pac} up={up} addMsg={addMsg} dossie={dossieOncologico} setDossie={setDossieGuardado}/>}
           {pronTab2==="exames"&&<div style={{background:"#fff",border:"1px solid #DDE3EC",borderRadius:14,padding:"16px 20px"}}><div style={{fontWeight:800,fontSize:14,color:"#0A0F1E",marginBottom:10}}>📎 Novos Exames via IA</div><UploadComIA pac={pac} up={up} addMsg={addMsg} destino="prontuario" origem="Médico" onConcluido={(res,meta)=>{if(adicionarDocumentoPadraoDossie(res,meta,"medico_upload"))alert("✅ Adicionado ao prontuário.");}}/></div>}
-          {pronTab2==="receitas"&&<div style={{display:"grid",gap:12}}><PrescreverDoenca pac={pac}/><ReceitasComp pac={pac} addCaixaEntrada={addCaixaEntrada} addMsg={addMsg}/></div>}
-          {pronTab2==="timeline"&&<div style={{background:"#fff",border:"1px solid #DDE3EC",borderRadius:14,padding:"16px 20px"}}><h3 style={{color:"#1B365D",fontWeight:800,fontSize:14,marginBottom:12}}>🕒 Linha do Tempo</h3><EvolutionTimeline exams={pac?.exames_imagem||[]} triages={(pac?.evolucoes||[]).map(e=>{let dh;try{const[d,m,y]=(e.data||"01/01/2020").split("/");dh=new Date(`${y}-${m}-${d}T${e.hora||"00:00"}:00`).toISOString();}catch(_){dh=new Date().toISOString();}return{id:e.id||String(Date.now()),__source:"evolucao",dataHora:dh,tipo:e.tipo||"consulta",enfermeiroNome:e.autor||"Médico",queixaAtual:e.texto,sinaisAlarme:[],qtLiberada:null};}).concat((triagens||[]).map(t=>({...t,__source:"triagem"})))} onDelete={apagarItemTimeline}/></div>}
+          {pronTab2==="receitas"&&<div style={{padding:"4px 0"}}><KitDocumentosComp pac={pac}/></div>}
+          {pronTab2==="timeline"&&<div style={{background:"#fff",border:"1px solid #DDE3EC",borderRadius:14,padding:"16px 20px"}}>
+            <h3 style={{color:"#1B365D",fontWeight:800,fontSize:14,marginBottom:12}}>🕒 Linha do Tempo</h3>
+            <EvolutionTimeline
+              marcos={[
+                pac?.data_biopsia&&{tipo:"diagnostico",titulo:"Diagnóstico / Biópsia",descricao:[pac?.diag,pac?.estadio&&("Est. "+pac.estadio),pac?.cid].filter(Boolean).join(" · ")||undefined,data:pac.data_biopsia},
+                pac?.trat&&pac?.data_sol&&{tipo:"inicio_qt",titulo:"Início do Tratamento",descricao:pac.trat,data:pac.data_sol},
+                dossieOncologico?.apac?.salvaEm&&{tipo:"apac",titulo:"APAC Emitida",descricao:pac?.cod_proc||undefined,data:dossieOncologico.apac.salvaEm},
+                dossieOncologico?.createdAt&&{tipo:"consulta",titulo:"Dossiê criado",descricao:"Primeiro registro do paciente neste sistema",data:dossieOncologico.createdAt},
+              ].filter(Boolean)}
+              exams={[
+                ...(pac?.exames_imagem||[]),
+                ...((dossieOncologico?.documentos||[]).filter(d=>d?.criadoEm||d?.data).map(d=>({nome:d.tipo||d.nome||"Documento",resumo:d.resumo||d.conteudo||"",criadoEm:d.criadoEm||d.data,origem:d.origem||"pipeline"}))),
+              ]}
+              triages={(pac?.evolucoes||[]).map(e=>{let dh;try{const[d,m,y]=(e.data||"01/01/2020").split("/");dh=new Date(`${y}-${m}-${d}T${e.hora||"00:00"}:00`).toISOString();}catch(_){dh=new Date().toISOString();}return{id:e.id||String(Date.now()),__source:"evolucao",dataHora:dh,tipo:e.tipo||"consulta",enfermeiroNome:e.autor||"Médico",queixaAtual:e.texto,sinaisAlarme:[],qtLiberada:null};}).concat((triagens||[]).map(t=>({...t,__source:"triagem"})))}
+              onDelete={apagarItemTimeline}
+            />
+          </div>}
         </div>
       );
       case "prescricao": return(
@@ -1233,6 +1595,7 @@ export default function App(){
       case "apac": return(
         <div style={{display:"grid",gap:14}}>
           <StatusDossieBar dossie={dossieOncologico}/>
+          <APACClinicalTools pac={pac} up={up} dossie={dossieOncologico} setDossie={setDossieGuardado} addMsg={addMsg}/>
           <APACDossieChecklist dossie={dossieOncologico} setDossie={setDossieGuardado}/>
           <APACEntradaRapida pac={pac} up={up} dossie={dossieOncologico} setDossie={setDossieGuardado} addMsg={addMsg}/>
           <SeletorAPAC
@@ -1261,24 +1624,47 @@ export default function App(){
         </div>
       );
       case "triagem_recebe": return <TriagemMedicoRecebe triagens={triagens} pac={pac} addMsg={addMsg} onEnviarDiscussao={t=>{setTriagemDiscussao(t);setMedTab2("discussao_clinica");}} onValidar={(t,txt)=>{setDossieOncologico(d=>{const base=d||criarDossieInicial(pac);const doc={id:Date.now(),tipo:"Conduta triagem validada",nome:"Conduta validada — "+(t?.nome||pac?.nome||"paciente"),resumo:txt||t?.resumo||"Conduta validada.",origem:"medico_triagem",criadoEm:NOW(),triagemId:t?.id};const novo={...base,paciente:{...(base.paciente||{}),...pac},documentos:[doc,...(base.documentos||[])],status:"pronto_medico",updatedAt:NOW()};novo.evolucao={...(novo.evolucao||{}),rascunho:gerarTextoEvolucao(novo)};novo.apac=validarAPAC(novo);return novo;});}}/>;
-      case "discussao_clinica": return <DiscussaoClinicaIA pac={pac} dossie={dossieOncologico} triagens={triagens} triagemSelecionada={triagemDiscussao} addMsg={addMsg} onSalvar={(texto)=>{if(!executarProntuarioSecurity({pac,texto,dossie:dossieOncologico,origem:"Discussão clínica IA"},addMsg))return false;const dt=new Date();const novaEv={id:Date.now(),data:dt.toLocaleDateString("pt-BR"),hora:dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo:"Discussão clínica IA",texto,autor:"Dr. Silas Negrão — CRM-PB 17341",fonte:"ia_discussao"};const novasEvolucoes=[novaEv,...(pac?.evolucoes||[])];up("evolucoes",novasEvolucoes);dbSalvarPaciente({...pac,evolucoes:novasEvolucoes});setDossieOncologico(d=>{const base=d||criarDossieInicial(pac);const doc={id:Date.now()+1,tipo:"Discussão clínica IA",nome:"Discussão clínica — "+(pac?.nome||"paciente"),resumo:texto,origem:"ia_discussao",criadoEm:NOW()};const novo={...base,paciente:{...(base.paciente||{}),...pac},documentos:[doc,...(base.documentos||[])],status:"em_consulta",updatedAt:NOW()};novo.evolucao={...(novo.evolucao||{}),rascunho:gerarTextoEvolucao(novo)};novo.apac=validarAPAC(novo);return novo;});return true;}}/>;
-      case "ia": return <AssistenteIA pac={pac} up={up} addMsg={addMsg} funcLogado={funcLogado} onSalvarEvolucao={(evolucao)=>{if(!executarProntuarioSecurity({pac,texto:evolucao,dossie:dossieOncologico,origem:"Assistente IA"},addMsg))return false;const dt=new Date();const nv={id:Date.now(),data:dt.toLocaleDateString("pt-BR"),hora:dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),tipo:"Assistente IA",texto:evolucao,autor:"Dr. Silas Negrão — CRM-PB 17341",fonte:"ia"};const ne=[nv,...(pac?.evolucoes||[])];up("evolucoes",ne);dbSalvarPaciente({...pac,evolucoes:ne});addMsg&&addMsg("🤖 IA","Médico","✅ Gerado.","msg");setMedTab2("prontuario");return true;}}/>;
+      case "discussao_clinica": return <DiscussaoClinicaIA pac={pac} dossie={dossieOncologico} triagens={triagens} triagemSelecionada={triagemDiscussao} addMsg={addMsg} onSalvar={(texto)=>salvarEvolucaoAssinada(texto,{origem:"Discussão clínica IA",tipo:"Discussão clínica IA",fonte:"ia_discussao",msgDe:"Discussão clínica IA",msgTexto:"✅ Discussão clínica salva no prontuário."})}/>;
+      case "ia": return <AssistenteIA pac={pac} up={up} addMsg={addMsg} funcLogado={funcLogado} onSalvarEvolucao={(evolucao)=>{const ok=salvarEvolucaoAssinada(evolucao,{origem:"Assistente IA",tipo:"Assistente IA",fonte:"ia",msgDe:"🤖 IA",msgTexto:"✅ Gerado."});if(ok)setMedTab2("prontuario");return ok;}}/>;
       case "modulos_v11": return <div style={{display:"grid",gap:12}}>
         <div style={{background:"#fff",border:"1px solid #DDE3EC",borderRadius:14,padding:"12px 16px"}}>
           <div style={{fontSize:12,fontWeight:900,color:"#1B365D",textTransform:"uppercase",letterSpacing:.6}}>Ferramentas avançadas</div>
           <div style={{fontSize:18,fontWeight:900,color:"#0A0F1E",marginTop:2}}>Módulos v1.1 dentro da aba médica</div>
           <p style={{fontSize:12,color:"#64748B",margin:"6px 0 0"}}>Uso opcional. O fluxo principal permanece: paciente + recepção → prontuário pronto na evolução médica.</p>
         </div>
-        <AppRoutes pac={pac} up={up} chamarClaude={chamarClaude} onVoltar={()=>setMedTab2("prontuario")}/>
+        <AppRoutes pac={pac} up={up} chamarClaude={createBoundClaude(pac,AGENT_INTENTS.EVOLUCAO)} onVoltar={()=>setMedTab2("prontuario")}/>
       </div>;
       case "admin": return(
         <div>
-          <SubTabsV4 tabs={[{id:"config",ico:"⚙️",label:"Config"},{id:"stats",ico:"📊",label:"Stats"},{id:"balanco",ico:"💰",label:"Balanço"},{id:"agenda",ico:"🗓",label:"Agenda"}]} active={adminTab2} onChange={setAdminTab2}/>
+          <AdminQuickAccess active={adminTab2} onSelect={setAdminTab2}/>
           {adminTab2==="config"&&<ConfiguracoesComp funcLogado={funcLogado} setFuncLogado={setFuncLogado}/>}
           {adminTab2==="stats"&&<EstatisticasComp pac={pac} consultasDia={consultasDia} historicoQT={historicoQT}/>}
           {adminTab2==="balanco"&&<GraficoProducao/>}
           {adminTab2==="agenda"&&<AgendamentoComp agendamentos={agendamentos} addAgendamento={addAgendamento} ismedico={true}/>}
         </div>
+      );
+      case "apagar_dados": return(
+        <ApagarDadosPanel
+          pac={pac}
+          dossie={dossieOncologico}
+          onNovoAtendimento={novoAtendimentoLimpo}
+          onConcluir={concluirAtendimentoAtual}
+          onApagarTela={()=>{
+            const np={...PAC0,pacID:genPacID()};
+            clearPacAtual?.();
+            localStorage.removeItem("dossie_oncologico_atual");
+            localStorage.removeItem("apacapp_primeira_consulta_rascunho");
+            setPac(np);
+            setDossieOncologico(criarDossieInicial(np));
+            setAiPatches([]);
+            setTriagemDiscussao(null);
+            setLaudoLiberado(false);
+            setCicloLiberado(false);
+            setPronTab2("evolucao");
+            goTab("prontuario");
+          }}
+          onZerarTudo={zerarTodosAtendimentosLocais}
+        />
       );
       default: return null;
     }
@@ -1288,6 +1674,12 @@ export default function App(){
   return(
     <React.Suspense fallback={null}>
     <>
+      <style>{`
+        @keyframes chatPulseUnread {
+          0%,100% { transform: translateY(0) scale(1); box-shadow: 0 10px 24px rgba(123,29,58,.22); }
+          50% { transform: translateY(-2px) scale(1.035); box-shadow: 0 0 0 8px rgba(123,29,58,.12), 0 14px 34px rgba(123,29,58,.28); }
+        }
+      `}</style>
       {/* Overlay emergência */}
       {emergenciaAtiva&&<div style={{position:"fixed",inset:0,background:"rgba(123,29,58,.97)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
         <div style={{background:"#fff",borderRadius:20,padding:30,maxWidth:480,width:"100%",textAlign:"center",boxShadow:"0 0 0 8px rgba(255,255,255,.12)"}}>
@@ -1299,7 +1691,7 @@ export default function App(){
             <p style={{fontSize:11,color:"#94A3B8",margin:"5px 0 0"}}>{emergenciaAtiva.hora}</p>
           </div>
           <div style={{display:"flex",gap:9}}>
-            <button onClick={()=>{setMedTab2("enfermagem");setEnfermagemTab2("salao");setEmergenciaAtiva(null);}} style={{flex:1,background:"linear-gradient(135deg,#7B1D3A,#9B2335)",color:"#fff",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🩺 Ir ao Salão</button>
+            <button onClick={()=>goTab("enfermagem",()=>{setEnfermagemTab2("salao");setEmergenciaAtiva(null);})} style={{flex:1,background:"linear-gradient(135deg,#7B1D3A,#9B2335)",color:"#fff",border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🩺 Ir ao Salão</button>
             <button onClick={()=>setEmergenciaAtiva(null)} style={{background:"transparent",color:"#6B7280",border:"1px solid #DDE3EC",borderRadius:10,padding:"12px 16px",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕</button>
           </div>
         </div>
@@ -1308,31 +1700,59 @@ export default function App(){
       <AppShell
         perfil="medico"
         activeTab={medTab2}
-        onTabChange={id=>{setMedTab2(id);if(id==="prontuario")setPronTab2("evolucao");if(id==="enfermagem")setEnfermagemTab2("triagem");}}
+        onTabChange={id=>goTab(id,()=>{if(id==="prontuario")setPronTab2("evolucao");if(id==="enfermagem")setEnfermagemTab2("triagem");})}
         pac={pac}
         fluxoStatus={pac?.status||"pronto_medico"}
         onTrocarPerfil={()=>{setMedLogado(false);setPg("landing");}}
         alertCount={totalAlertas}
         msgCount={msgNaoLidasTotal}
+        sidebarTop={
+          <div style={{display:"grid",gap:7}}>
+            <div style={{fontSize:10,fontWeight:900,color:"rgba(255,255,255,.58)",textTransform:"uppercase",letterSpacing:1}}>
+              Buscar paciente
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:4,background:"#FFFFFF",border:"1px solid rgba(255,255,255,.18)",borderRadius:9,padding:"4px"}}>
+              <input
+                list="pacientes_medico_busca_sidebar"
+                value={buscaMedicoRapida}
+                onChange={e=>setBuscaMedicoRapida(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter")abrirPacienteBuscaHeader();}}
+                placeholder="Nome, CPF, CNS..."
+                style={{border:"none",outline:"none",fontSize:11,fontFamily:"inherit",fontWeight:750,color:"#1B365D",minWidth:0,flex:1,padding:"5px 6px",background:"transparent"}}
+              />
+              <datalist id="pacientes_medico_busca_sidebar">
+                {pacientesBuscaHeader.map((p,i)=><option key={`${p.pacID||p.nome}-${i}`} value={p.nome}>{[p.cpf,p.cns,p.cid,p.diag].filter(Boolean).join(" · ")}</option>)}
+              </datalist>
+              <button title="Abrir paciente pesquisado" onClick={abrirPacienteBuscaHeader} style={{border:"none",background:"#EBF2FF",color:"#1B365D",borderRadius:7,padding:"6px 8px",fontSize:11,fontWeight:950,cursor:"pointer",fontFamily:"inherit"}}>Abrir</button>
+            </div>
+          </div>
+        }
         headerRight={
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>
-            <button title="Concluir atendimento" onClick={()=>setMedTab2("concluir_atendimento")} style={{background:"#ECFDF5",border:"1px solid #15803D44",borderRadius:8,padding:"5px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#15803D",fontWeight:900}}>✅ Concluir</button>
-            <button title="Novo atendimento" onClick={()=>setMedTab2("novo_atendimento")} style={{background:"#FDF8EE",border:"1px solid #B8860B44",borderRadius:8,padding:"5px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#B8860B",fontWeight:900}}>🧼 Nova Consulta</button>
-            <button title="Buscar paciente" onClick={()=>setMedTab2("pacientes")} style={{background:"#FFFFFF",border:"1px solid #DDE3EC",borderRadius:8,padding:"5px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#1B365D",fontWeight:800}}>🔎 Paciente</button>
-            <button title="Chat da equipe" onClick={()=>setChatFlutAberto(x=>!x)} style={{position:"relative",background:"#EBF2FF",border:"1px solid #2756A033",borderRadius:8,padding:"5px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#1B365D",fontWeight:800}}>
-              💬 Chat{msgNaoLidasTotal>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#7B1D3A",color:"#fff",borderRadius:999,width:16,height:16,display:"grid",placeItems:"center",fontSize:9,fontWeight:900}}>{msgNaoLidasTotal}</span>}
+            <button title="Labs — enviar laudos" onClick={()=>goTab("labs_upload")} style={{background:"#EFF6FF",border:"1px solid #3B82F655",borderRadius:8,padding:"5px 11px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#1D4ED8",fontWeight:900}}>🧪 Labs</button>
+            <button title="Radio — enviar imagens" onClick={()=>goTab("radio_upload")} style={{background:"#F0FDF4",border:"1px solid #22C55E55",borderRadius:8,padding:"5px 11px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#15803D",fontWeight:900}}>📡 Radio</button>
+            <button title="Novo atendimento" onClick={()=>goTab("novo_atendimento")} style={{background:"#FDF8EE",border:"1px solid #B8860B44",borderRadius:8,padding:"5px 11px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#B8860B",fontWeight:900}}>🌿 Nova Consulta</button>
+            <button title="Triagem de enfermagem" onClick={()=>goTab("enfermagem",()=>setEnfermagemTab2("triagem"))} style={{background:"#FFF7ED",border:"1px solid #F59E0B55",borderRadius:8,padding:"5px 11px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#92400E",fontWeight:900}}>🩺 Triagem</button>
+            <button title="Alertas clínicos" onClick={goAlerta} style={{position:"relative",background:totalAl>0?"#FEF2F2":"#F5F7FA",border:"1px solid "+(totalAl>0?"#F8717155":"#DDE3EC"),borderRadius:8,padding:"5px 11px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:totalAl>0?"#991B1B":"#64748B",fontWeight:900}}>
+              🚨 Alerta{totalAl>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#DC2626",color:"#fff",borderRadius:999,minWidth:16,height:16,display:"grid",placeItems:"center",fontSize:9,fontWeight:900,padding:"0 3px"}}>{totalAl}</span>}
             </button>
-            <button title="Laboratório" onClick={()=>setMedTab2("upload_modulo")} style={{background:"#FFFFFF",border:"1px solid #DDE3EC",borderRadius:8,padding:"5px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#1B365D",fontWeight:800}}>🧪 Lab</button>
-            <button title="Radiologia" onClick={()=>setMedTab2("upload_modulo")} style={{background:"#FFFFFF",border:"1px solid #DDE3EC",borderRadius:8,padding:"5px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#1B365D",fontWeight:800}}>🩻 Radio</button>
-            <button title="Enfermagem - triagem" onClick={()=>{setMedTab2("enfermagem");setEnfermagemTab2("triagem");}} style={{background:"#FDF8EE",border:"1px solid #B8860B55",borderRadius:8,padding:"5px 9px",fontSize:11,cursor:"pointer",fontFamily:"inherit",color:"#1B365D",fontWeight:800}}>🩺 Triagem</button>
-            <div title={syncStatus.label} style={{fontSize:10,color:syncStatus.cor,background:"#F5F7FA",borderRadius:8,padding:"4px 8px",fontWeight:700,border:"1px solid #DDE3EC"}}>{syncStatus.label}</div>
           </div>
         }
       >
         {renderMedico2()}
       </AppShell>
       {/* Chat flutuante */}
-      {chatFlutAberto&&<div style={{position:"fixed",bottom:20,right:20,width:320,maxHeight:420,background:"#fff",borderRadius:16,boxShadow:"0 12px 40px rgba(0,0,0,.18)",zIndex:9998,display:"flex",flexDirection:"column",overflow:"hidden",border:"2px solid #1B365D"}}>
+      {!chatFlutAberto&&<button
+        type="button"
+        onClick={()=>setChatFlutAberto(true)}
+        style={{position:"fixed",right:22,bottom:22,zIndex:9998,border:"none",borderRadius:18,background:msgNaoLidasTotal>0?"linear-gradient(135deg,#7B1D3A,#B91C1C)":"linear-gradient(135deg,#1B365D,#2756A0)",color:"#fff",padding:"12px 16px",fontSize:13,fontWeight:950,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 10px 24px rgba(27,54,93,.22)",animation:msgNaoLidasTotal>0?"chatPulseUnread 1.15s ease-in-out infinite":"none"}}
+        title="Chat suspenso da equipe"
+      >
+        💬 Chat{msgNaoLidasTotal>0?` · ${msgNaoLidasTotal} nova${msgNaoLidasTotal>1?"s":""}`:""}
+      </button>}
+      {chatFlutAberto&&<>
+      <div onClick={()=>setChatFlutAberto(false)} style={{position:"fixed",inset:0,zIndex:9997,background:"transparent"}}/>
+      <div onClick={e=>e.stopPropagation()} style={{position:"fixed",bottom:20,right:20,width:340,maxHeight:440,background:"#fff",borderRadius:16,boxShadow:"0 12px 40px rgba(0,0,0,.18)",zIndex:9998,display:"flex",flexDirection:"column",overflow:"hidden",border:"2px solid #1B365D"}}>
         <div style={{background:"linear-gradient(90deg,#0D1F3C,#1B365D)",color:"#fff",padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><strong style={{fontSize:13}}>💬 Chat Equipe</strong><button onClick={()=>setChatFlutAberto(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,.5)",cursor:"pointer",fontSize:16}}>✕</button></div>
         <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column",gap:6,maxHeight:280}}>
           {(mensagens||[]).slice(0,8).map((m,i)=><div key={i} style={{background:m.de==="Médico"?"#EBF2FF":"#F5F7FA",borderRadius:10,padding:"6px 10px",fontSize:12}}><span style={{fontWeight:700,color:"#1B365D",fontSize:10}}>{m.de}→{m.para}</span><p style={{margin:"2px 0 0",color:"#374151"}}>{String(m.txt||"").substring(0,80)}</p></div>)}
@@ -1341,7 +1761,8 @@ export default function App(){
           <input id="chat_v4" placeholder="Mensagem..." style={{flex:1,border:"1.5px solid #DDE3EC",borderRadius:8,padding:"7px 10px",fontSize:12,fontFamily:"inherit",outline:"none"}} onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addMsg("Médico","Todos",e.target.value.trim(),"msg");e.target.value="";}}}/>
           <button onClick={()=>{const inp=document.getElementById("chat_v4");if(inp?.value.trim()){addMsg("Médico","Todos",inp.value.trim(),"msg");inp.value="";}}} style={{background:"linear-gradient(135deg,#1B365D,#2756A0)",color:"#fff",border:"none",borderRadius:8,padding:"7px 12px",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>→</button>
         </div>
-      </div>}
+      </div>
+      </>}
     </>
     </React.Suspense>
   );

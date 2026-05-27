@@ -6,11 +6,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { N, T, G, VE, AM, VM, BG, PROTOS, PROTOCOLOS_DB, detectarTumor, calcSC } from "../../utils/constants";
 import { sc_, sc, Btn, H2, H3, Fld, PrintModal, abrirDoc } from "../../components/ui/primitives";
-import { chamarClaude } from "../../utils/api";
+import { agentCallText, AGENT_INTENTS } from "../../utils/agentGateway";
 
-async function IA_sugerirProtocolo(diag,estadio,bio,ecog){
+async function IA_sugerirProtocolo(diag,estadio,bio,ecog,pac){
   const prompt=`Oncologista clínico: liste os 3 protocolos de quimioterapia mais adequados para este paciente, com justificativa breve. Responda em JSON puro sem markdown:\n{"sugestoes":[{"protocolo":"nome","justificativa":"1 frase","linha":"1ª/2ª linha","evidencia":"estudo nome","prioridade":1},...]}.\n\nDiagnóstico: ${diag} | Estádio: ${estadio} | Bio: ${bio} | ECOG: ${ecog}`;
-  try{const txt=await chamarClaude(prompt,500);const clean=txt.replace(/```json|```/g,"").trim();return JSON.parse(clean);}
+  try{const txt=await agentCallText({prompt,maxTokens:500,intent:AGENT_INTENTS.SUGERIR_PROTOCOLO,pac});const clean=txt.replace(/```json|```/g,"").trim();return JSON.parse(clean);}
   catch{return{sugestoes:[]};}
 }
 
@@ -23,7 +23,7 @@ export default function PrescricaoQT({pac,up,addMsg,ciclosHistorico,setCiclosHis
   const [loadingIA,setLoadingIA]=useState(false);
   const [tumorDetectado,setTumorDetectado]=useState(null);
   useEffect(()=>{if(pac?.diag){const t=detectarTumor(pac.diag);setTumorDetectado(t);}},[pac?.diag]);
-  const buscarSugestoesIA=async()=>{setLoadingIA(true);const r=await IA_sugerirProtocolo(pac?.diag,pac?.estadio,pac?.bio,pac?.ecog);setSugestoesIA(r.sugestoes||[]);setLoadingIA(false);};
+  const buscarSugestoesIA=async()=>{setLoadingIA(true);const r=await IA_sugerirProtocolo(pac?.diag,pac?.estadio,pac?.bio,pac?.ecog,pac);setSugestoesIA(r.sugestoes||[]);setLoadingIA(false);};
   const todosProtos=Object.values(PROTOCOLOS_DB).flatMap(t=>t.grupos.flatMap(g=>g.protos.map(p=>({...p,tumor:t.label}))));
   const protosFiltrados=busca.length>1?todosProtos.filter(p=>p.nome.toLowerCase().includes(busca.toLowerCase())||p.tumor.toLowerCase().includes(busca.toLowerCase())):[];
   if(tela==="detalhe"&&protoSel)return <DetalheProtocolo proto={protoSel} pac={pac} up={up} addMsg={addMsg} historico={ciclosHistorico} setHistorico={setCiclosHistorico} onSalvoCiclos={onSalvoCiclos} onVoltar={()=>setTela("busca")} onSalvo={()=>setTela("historico")}/>;

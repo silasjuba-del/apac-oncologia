@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { promptExtrairJSON, validarCamposAPAC, promptGerarProntuario } from "../utils/promptProntuario.js";
+import { _backendHeaders } from "../utils/api.js";
 
 const COLORS={navy:"#1B365D",teal:"#2B7A8C",gold:"#B8860B",red:"#A30000",green:"#1B5E20",light:"#F0F4F8",white:"#FFFFFF",gray:"#6B7C93",border:"#CBD5E0"};
 
@@ -55,7 +56,7 @@ async function callClaude({apiKey,prompt,userText,files,maxTokens=2200}){
       const mimeType=f.type||(/\.pdf$/i.test(f.name)?"application/pdf":"application/octet-stream");
       if(["application/pdf","image/jpeg","image/png","image/webp"].includes(mimeType)) filesPayload.push({name:f.name,mimeType,base64:await fileToBase64(f)});
     }
-    const resp=await fetch(api+"/api/claude/resumo",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:[prompt,userText,fileList].filter(Boolean).join("\n\n"),maxTokens,files:filesPayload})});
+    const resp=await fetch(api+"/api/claude/resumo",{method:"POST",headers:_backendHeaders(),body:JSON.stringify({prompt:[prompt,userText,fileList].filter(Boolean).join("\n\n"),maxTokens,files:filesPayload})});
     const data=await resp.json().catch(()=>({}));
     if(!resp.ok||!data.ok)throw new Error(data.message||"Claude backend indisponível.");
     return data.text||"";
@@ -117,6 +118,119 @@ function extrairJSONSeguro(texto){
 }
 
 // ── Componente Calculadora QT ──────────────────────────────────
+function respostaIAInvalida(texto=""){
+  const t=String(texto||"").trim();
+  return !t || /^âš |^⚠/i.test(t) || /backend indispon|claude backend indispon|erro http|anthropic_api_key|api key/i.test(t);
+}
+
+function limparSaidaIA(texto=""){
+  return String(texto||"")
+    .replace(/```(?:json)?/gi,"")
+    .replace(/```/g,"")
+    .replace(/\*\*/g,"")
+    .replace(/[ \t]+$/gm,"")
+    .trim();
+}
+
+function montarResumoDiagramadoLocal(pac={},dados={},textoFonte="",aviso=""){
+  const clin=dados?.dados_clinicos_mencionados||{};
+  const exam=dados?.exames_presentes||{};
+  const lab=dados?.laboratorio||{};
+  const sug=dados?.sugestoes||{};
+  const v=(...vals)=>vals.map(x=>String(x||"").trim()).find(Boolean)||"";
+  const exames=Object.entries(exam)
+    .filter(([,valor])=>String(valor||"").trim())
+    .map(([tipo,valor])=>"• "+tipo.replace(/_/g," ").toUpperCase()+" - "+String(valor).trim());
+  const textoLivre=String(textoFonte||"").trim();
+  if(!exames.length&&textoLivre){
+    textoLivre.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).slice(0,8)
+      .forEach(l=>exames.push("• "+l.replace(/^\s*[•\-–—]\s*/,"")));
+  }
+  const pendencias=[
+    aviso,
+    sug?.pendencias,
+    !v(dados?.diagnostico,pac?.diag)&&"Confirmar diagnóstico histológico.",
+    !v(dados?.cid10,pac?.cid,pac?.cid_sugerido)&&"Confirmar CID-10.",
+    !v(dados?.estadiamento_tnm,dados?.estadiamento_romano,pac?.estadio,pac?.tnm)&&"Confirmar estadiamento/TNM.",
+    !exames.length&&"Anexar ou revisar laudos originais.",
+  ].filter(Boolean);
+  return limparSaidaIA([
+    "DADOS ANAGRÁFICOS:",
+    "Nome: "+v(pac?.nome),
+    "Data de nascimento: "+v(pac?.nasc,dados?.dados_demograficos?.data_nascimento),
+    "CPF: "+v(pac?.cpf),
+    "CNS: "+v(pac?.cns),
+    "Nome da mãe: "+v(pac?.mae),
+    "Cidade/Naturalidade: "+v(pac?.cidade,pac?.naturalidade,dados?.dados_demograficos?.cidade),
+    "",
+    "DADOS CLÍNICOS:",
+    "Antecedentes patológicos: "+v(clin?.antecedentes,pac?.antec),
+    "Medicações de uso contínuo: "+v(clin?.medicamentos,pac?.meds),
+    "Alergias: "+v(clin?.alergias,pac?.alerg),
+    "Cirurgias prévias: "+v(clin?.cirurgias,pac?.anam_cirurgia),
+    "Calendário vacinal: "+v(pac?.vacinas),
+    "Histórico familiar: "+v(clin?.familiar_oncologico,pac?.anam_hist_fam),
+    "Queixa principal: "+v(pac?.queixa),
+    "ECOG: "+v(clin?.performance_status,pac?.ecog),
+    "",
+    "DADOS ONCOLÓGICOS:",
+    "Diagnóstico: "+v(dados?.diagnostico,pac?.diag).toUpperCase(),
+    "Tipo de tumor: "+v(dados?.morfologia_subtipo,dados?.diagnostico,pac?.diag),
+    "Sede tumoral: "+v(dados?.topografia_primaria,pac?.local_cancer),
+    "Estadiamento/TNM: "+v(dados?.estadiamento_tnm,pac?.tnm),
+    "Estágio: "+v(dados?.estadiamento_romano,pac?.estadio),
+    "Subtipo: "+v(dados?.subtipo_molecular,pac?.subtipo,pac?.bio),
+    "Biomarcadores: "+v(dados?.biomarcadores,pac?.bio),
+    "CID-10: "+v(dados?.cid10,pac?.cid,pac?.cid_sugerido),
+    "Intenção terapêutica: "+v(dados?.intencao_terapeutica,pac?.intencao),
+    "",
+    "LAUDOS EM CRONOLOGIA:",
+    ...(exames.length?exames:[""]),
+    "",
+    "LABORATÓRIO:",
+    "Função renal: "+v(lab?.funcao_renal),
+    "Função hepática: "+v(lab?.funcao_hepatica),
+    "Hemograma: "+v(lab?.hemograma),
+    "Marcadores tumorais: "+v(lab?.marcadores_tumorais),
+    "",
+    "CONDUTA:",
+    "",
+    "OBSERVAÇÕES:",
+    "Pendências: "+pendencias.join(" "),
+    "Sugestões: "+v(sug?.completar_estadiamento,sug?.biomarcadores_adicionais,sug?.protocolo_sus_sboc,sug?.trial_relacionado),
+  ].join("\n"));
+}
+
+async function gerarResumoDossieAssistente({apiKey,pac,texto,files,setMsg}){
+  let dados=baseDadosExtraidos(texto||"");
+  let avisoJson="";
+  try{
+    setMsg&&setMsg("Passo 1/2 - Extraindo dados dos laudos...");
+    const p1=promptExtrairJSON(pac?.nome||"Paciente",texto||"");
+    const resJSON=await callClaude({apiKey,prompt:p1,userText:"",files,maxTokens:1800});
+    const parsed=extrairJSONSeguro(resJSON);
+    dados=parsed.dados&&typeof parsed.dados==="object"?parsed.dados:dados;
+    avisoJson=parsed.aviso||"";
+  }catch(e){
+    avisoJson="IA indisponível no Passo 1: "+(e?.message||"erro ao extrair dados")+". Gerado rascunho local para revisão.";
+  }
+  const faltando=validarCamposAPAC(dados);
+  const aviso=faltando.length>0?`CAMPOS CRÍTICOS AUSENTES PARA APAC: ${faltando.join(" | ")}\n${"-".repeat(60)}\n\n`:"";
+  let resPron="";
+  try{
+    setMsg&&setMsg("Passo 2/2 - Gerando prontuário oncológico...");
+    const p2=promptGerarProntuario(pac?.nome||"Paciente","upload direto",dados);
+    resPron=await callClaude({apiKey,prompt:p2,userText:"",files:[],maxTokens:3500});
+  }catch(e){
+    resPron="";
+    avisoJson=[avisoJson,"IA indisponível no Passo 2: "+(e?.message||"erro ao gerar prontuário")+"."].filter(Boolean).join(" ");
+  }
+  if(respostaIAInvalida(resPron)){
+    resPron=montarResumoDiagramadoLocal(pac,dados,texto,avisoJson||"Resumo local gerado porque a IA não retornou resposta útil.");
+  }
+  return aviso+limparSaidaIA(resPron);
+}
+
 function CalculadoraQT({pac,qtParams,setQtParams,sc}){
   const N=COLORS.navy,T=COLORS.teal,G=COLORS.gold;
   const inp={border:"1px solid #CBD5E1",borderRadius:8,padding:"8px 10px",fontSize:13,fontFamily:"Segoe UI,Arial,sans-serif",width:"100%",boxSizing:"border-box"};
@@ -315,6 +429,10 @@ export default function AssistenteIA({pac,addMsg,onSalvarEvolucao}){
     setLoading(true);setErr("");setMsg("");setOutput("");
     try{
       if(agentId==="dossie"){
+        const resumo=await gerarResumoDossieAssistente({apiKey,pac,texto,files,setMsg});
+        setOutput(resumo);
+        setMsg("Dossiê gerado. Revise antes de enviar ao prontuário.");
+        return;
         setMsg("⏳ Passo 1/2 — Extraindo dados dos laudos...");
         const p1=promptExtrairJSON(pac?.nome||"Paciente",texto||"");
         const resJSON=await callClaude({apiKey,prompt:p1,userText:"",files,maxTokens:1800});
@@ -359,6 +477,7 @@ export default function AssistenteIA({pac,addMsg,onSalvarEvolucao}){
 
     const executar=async(a)=>{
       if(a.id==="dossie"){
+        return await gerarResumoDossieAssistente({apiKey,pac,texto,files,setMsg});
         setMsg("Passo 1/2 - Extraindo dados dos laudos...");
         const p1=promptExtrairJSON(pac?.nome||"Paciente",texto||"");
         const resJSON=await callClaude({apiKey,prompt:p1,userText:"",files,maxTokens:1800});

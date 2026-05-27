@@ -10,10 +10,12 @@ const VM = "#B91C1C";
 const AM = "#B45309";
 const BG = "#EEF2F7";
 
+const MARCO_COR = "#7C3AED";   // roxo para marcos clínicos
 const TYPE_META = {
-  exam:    { label: "EXAME / LAUDO",       dot: G,  border: G,  bg: "#FFFBEB", badge: "#FEF3C7", badgeTxt: AM   },
-  triage:  { label: "TRIAGEM ENFERMAGEM",  dot: T,  border: T,  bg: "#F0F9FF", badge: "#DBEAFE", badgeTxt: T    },
-  evolucao:{ label: "EVOLUÇÃO MÉDICA",     dot: N,  border: N,  bg: "#EEF2F7", badge: "#E0E7FF", badgeTxt: N    },
+  exam:    { label: "EXAME / LAUDO",       dot: G,          border: G,          bg: "#FFFBEB", badge: "#FEF3C7", badgeTxt: AM        },
+  triage:  { label: "TRIAGEM ENFERMAGEM",  dot: T,          border: T,          bg: "#F0F9FF", badge: "#DBEAFE", badgeTxt: T         },
+  evolucao:{ label: "EVOLUÇÃO MÉDICA",     dot: N,          border: N,          bg: "#EEF2F7", badge: "#E0E7FF", badgeTxt: N         },
+  marco:   { label: "MARCO CLÍNICO",       dot: MARCO_COR,  border: MARCO_COR,  bg: "#F5F3FF", badge: "#EDE9FE", badgeTxt: MARCO_COR },
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -74,6 +76,20 @@ function itemBody(item) {
   ].filter(Boolean).join(" "));
 }
 
+function fullItemText(item) {
+  const d = item?.data || {};
+  const alarmes = Array.isArray(d.alarmes) ? d.alarmes : [];
+  const sinaisAlarme = Array.isArray(d.sinaisAlarme) ? d.sinaisAlarme : [];
+  return [
+    `${fmtDate(item?.date)} - ${TYPE_META[item?.type]?.label || "REGISTRO"}`,
+    itemTitle(item),
+    itemBody(item),
+    d.conduta && "CONDUTA: " + d.conduta,
+    alarmes.length ? "SINAIS DE ALARME: " + alarmes.join(" · ") : "",
+    sinaisAlarme.length ? "SINAIS DE ALARME: " + sinaisAlarme.join(" · ") : "",
+  ].filter(Boolean).join("\n\n");
+}
+
 function itemSignature(item) {
   return [
     item?.type || "",
@@ -91,6 +107,14 @@ function cleanTimelineText(v) {
   return String(v || "")
     .replace(/^\s*[•\-–—]\s*/gm, "")
     .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatClinicalTimelineText(v = "") {
+  return String(v || "")
+    .replace(/\s+(DADOS\s+ANAGR[ÁA]FICOS|RESUMO\s+CL[ÍI]NICO|DADOS\s+CL[ÍI]NICOS|DADOS\s+ONCOL[ÓO]GICOS|LAUDOS?\s+EM\s+CRONOLOGIA|LABORAT[ÓO]RIO|EXAME\s+F[ÍI]SICO|CONDUTA|OBSERVA[ÇC][ÕO]ES?)\s+/gi, "\n===$1===\n")
+    .replace(/\s+(Queixa|Antecedentes patol[óo]gicos|Medica[çc][õo]es de uso cont[íi]nuo|Alergias|Cirurgias pr[ée]vias|Hist[óo]rico familiar|Tipo de tumor|Sede tumoral|Estadiamento\/TNM|Est[áa]gio|Subtipo|Biomarcadores|CID-10|ECOG|Pend[êe]ncias|Sugest[õo]es|Exame f[íi]sico|Conduta)\s*:/gi, "\n• $1:")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -133,11 +157,11 @@ function Pill({ label, color }) {
       color: color,
       border: "1px solid " + color + "55",
       borderRadius: 20,
-      padding: "2px 10px",
-      fontSize: 11,
+      padding: "1px 8px",
+      fontSize: 10,
       fontWeight: 700,
-      marginRight: 4,
-      marginBottom: 4,
+      marginRight: 3,
+      marginBottom: 3,
       whiteSpace: "nowrap",
     }}>{label}</span>
   );
@@ -145,13 +169,19 @@ function Pill({ label, color }) {
 
 // ─── Card shell ──────────────────────────────────────────────────────────────
 
-function Card({ meta, dateObj, children, onDelete }) {
+function Card({ meta, dateObj, children, onDelete, onOpen, fullText }) {
+  const [open, setOpen] = useState(false);
   const dot   = meta.dot;
   const bg    = meta.bg;
   const border= meta.border;
+  const canExpand = !!fullText;
+  const toggleOpen = () => {
+    if (canExpand) setOpen(v => !v);
+    else onOpen && onOpen();
+  };
 
   return (
-    <div style={{
+    <div onClick={toggleOpen} style={{
       background: "#fff",
       borderRadius: 14,
       boxShadow: "0 2px 10px rgba(0,0,0,.07)",
@@ -159,6 +189,7 @@ function Card({ meta, dateObj, children, onDelete }) {
       borderLeft: `5px solid ${border}`,
       overflow: "hidden",
       marginBottom: 2,
+      cursor: (onOpen || canExpand) ? "pointer" : "default",
     }}>
       {/* Header row */}
       <div style={{
@@ -178,11 +209,11 @@ function Card({ meta, dateObj, children, onDelete }) {
 
         {/* Type label */}
         <span style={{
-          fontSize: 15,
+          fontSize: 10,
           fontWeight: 900,
           color: dot,
           flex: 1,
-          letterSpacing: 0.3,
+          letterSpacing: 0.5,
           textTransform: "uppercase",
         }}>{meta.label}</span>
 
@@ -192,15 +223,15 @@ function Card({ meta, dateObj, children, onDelete }) {
           color: meta.badgeTxt,
           border: `1px solid ${meta.border}33`,
           borderRadius: 20,
-          padding: "3px 12px",
-          fontSize: 11,
+          padding: "2px 9px",
+          fontSize: 10,
           fontWeight: 800,
           flexShrink: 0,
         }}>{fmtDate(dateObj)}{fmtTime(dateObj) ? " · " + fmtTime(dateObj) : ""}</span>
         {onDelete && (
           <button
             type="button"
-            onClick={onDelete}
+            onClick={(e)=>{e.stopPropagation();onDelete&&onDelete();}}
             style={{
               background: "#FFF5F5",
               color: VM,
@@ -225,6 +256,45 @@ function Card({ meta, dateObj, children, onDelete }) {
       {/* Body */}
       <div style={{ padding: "10px 16px 14px 16px" }}>
         {children}
+        {(onOpen || canExpand) && (
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:8}}>
+            {canExpand && open && (
+              <button
+                type="button"
+                onClick={(e)=>{e.stopPropagation();globalThis.navigator?.clipboard?.writeText(fullText);}}
+                style={{
+                  border:"1px solid "+T+"55",background:"#F0F9FF",
+                  color:T,borderRadius:8,padding:"5px 10px",
+                  fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit",
+                }}
+              >
+                Copiar
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e)=>{e.stopPropagation();toggleOpen();}}
+              style={{
+                border:"1px solid "+meta.border+"55",background:meta.badge,
+                color:meta.badgeTxt,borderRadius:8,padding:"5px 10px",
+                fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit",
+              }}
+            >
+              {canExpand ? (open ? "Fechar" : "Expandir") : "Abrir resumo"}
+            </button>
+          </div>
+        )}
+        {canExpand && open && (
+          <div style={{
+            marginTop:10,
+            background:bg,
+            border:"1px solid "+border+"33",
+            borderRadius:12,
+            padding:"12px 14px",
+          }}>
+            <BulletLines text={fullText} color="#24364f" />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -248,7 +318,7 @@ function AuthorLine({ text }) {
 
 function BulletLines({ text, color }) {
   if (!text) return null;
-  const lines = String(text).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const lines = formatClinicalTimelineText(text).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   return (
     <div style={{ marginTop: 4 }}>
       {lines.map((l, i) => {
@@ -258,7 +328,7 @@ function BulletLines({ text, color }) {
           return (
             <div key={i} style={{
               fontWeight: 900,
-              fontSize: 16,
+              fontSize: 18,
               color: N,
               textTransform: "uppercase",
               letterSpacing: 0.5,
@@ -273,7 +343,7 @@ function BulletLines({ text, color }) {
         const bulletMatch = l.match(/^•\s*([^:]{1,40}):\s*(.+)$/);
         if (bulletMatch) {
           return (
-            <div key={i} style={{ display: "flex", gap: 6, fontSize: 12, color: color || "#374151", lineHeight: 1.6, marginBottom: 2 }}>
+            <div key={i} style={{ display: "flex", gap: 7, fontSize: 13, color: color || "#374151", lineHeight: 1.62, marginBottom: 4 }}>
               <span style={{ fontWeight: 800, color: N, flexShrink: 0 }}>• {bulletMatch[1]}:</span>
               <span style={{ flex: 1 }}>{bulletMatch[2]}</span>
             </div>
@@ -284,10 +354,10 @@ function BulletLines({ text, color }) {
           <div key={i} style={{
             display: "flex",
             gap: 8,
-            fontSize: 12,
+            fontSize: 13,
             color: color || "#374151",
-            lineHeight: 1.6,
-            marginBottom: 2,
+            lineHeight: 1.62,
+            marginBottom: 4,
           }}>
             <span style={{ color: N, fontWeight: 900, flexShrink: 0 }}>•</span>
             <span>{l.replace(/^•\s*/, "")}</span>
@@ -350,7 +420,7 @@ function QTStatus({ liberada, autorizadoPor, bloqueadaPor }) {
 
 // ─── Exam Card ───────────────────────────────────────────────────────────────
 
-function ExamCard({ e, dateObj, onDelete }) {
+function ExamCard({ e, dateObj, onDelete, onOpen }) {
   const meta   = TYPE_META.exam;
   const nome   = e.nome || e.tipo || e.nomeExame || "Exame";
   const resumo = e.resumo || e.resultado || e.laudo || "";
@@ -366,9 +436,14 @@ function ExamCard({ e, dateObj, onDelete }) {
     conclusao,
   ].filter(Boolean).join("\n");
 
+  const fullText = [
+    nome,
+    bodyText,
+  ].filter(Boolean).join("\n\n");
+
   return (
-    <Card meta={meta} dateObj={dateObj} onDelete={onDelete}>
-      <div style={{ fontSize: 14, fontWeight: 900, color: G, marginBottom: 4 }}>{nome}</div>
+    <Card meta={meta} dateObj={dateObj} onDelete={onDelete} onOpen={onOpen} fullText={fullText}>
+      <div style={{ fontSize: 12, fontWeight: 900, color: G, marginBottom: 3 }}>{nome}</div>
       {fonte && <AuthorLine text={"Fonte: " + fonte} />}
       {bodyText && <BulletLines text={bodyText} color="#4B5563" />}
     </Card>
@@ -377,7 +452,7 @@ function ExamCard({ e, dateObj, onDelete }) {
 
 // ─── Triage Card ─────────────────────────────────────────────────────────────
 
-function TriageCard({ t, dateObj, onDelete }) {
+function TriageCard({ t, dateObj, onDelete, onOpen }) {
   const autor   = t.enfermeiroNome || t.enfermeiro || t.autor || "";
   const cargo   = t.cargo || "";
   const tipo    = t.tipo || "";
@@ -404,9 +479,16 @@ function TriageCard({ t, dateObj, onDelete }) {
   const alarmes = t.sinaisAlarme || [];
 
   const authorLine = [autor, cargo].filter(Boolean).join(" · ");
+  const fullText = [
+    authorLine,
+    queixa && "QUEIXA: " + queixa,
+    evolText || obs,
+    Array.isArray(alarmes) && alarmes.length ? "SINAIS DE ALARME: " + alarmes.join(" · ") : "",
+    t.qtLiberada != null ? (t.qtLiberada ? "QT LIBERADA" : "QT BLOQUEADA") : "",
+  ].filter(Boolean).join("\n\n");
 
   return (
-    <Card meta={meta} dateObj={dateObj} onDelete={onDelete}>
+    <Card meta={meta} dateObj={dateObj} onDelete={onDelete} onOpen={onOpen} fullText={fullText}>
       {authorLine && <AuthorLine text={authorLine} />}
 
       {/* Vitals */}
@@ -418,7 +500,7 @@ function TriageCard({ t, dateObj, onDelete }) {
 
       {/* Queixa */}
       {queixa && (
-        <div style={{ fontSize: 12, color: "#4B5563", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, color: "#4B5563", marginBottom: 5 }}>
           <span style={{ fontWeight: 700, color: N }}>Queixa: </span>{queixa}
         </div>
       )}
@@ -437,6 +519,58 @@ function TriageCard({ t, dateObj, onDelete }) {
         bloqueadaPor={t.qtBloqueadaPor}
       />
     </Card>
+  );
+}
+
+// ─── Marco Card (milestone clínico) ──────────────────────────────────────────
+
+function MarcoCard({ m, dateObj, onOpen }) {
+  const ICONES = {
+    diagnostico:   "🔬",
+    inicio_qt:     "💉",
+    apac:          "📋",
+    consulta:      "🩺",
+    cirurgia:      "🔪",
+    radioterapia:  "☢️",
+    obito:         "🖤",
+    remissao:      "✅",
+    recidiva:      "⚠️",
+    outro:         "📌",
+  };
+  const icone = ICONES[m.tipo] || "📌";
+  return (
+    <div onClick={onOpen} style={{
+      background: "#F5F3FF",
+      border: `2px solid ${MARCO_COR}`,
+      borderLeft: `6px solid ${MARCO_COR}`,
+      borderRadius: 14,
+      padding: "12px 16px",
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 12,
+      cursor: onOpen ? "pointer" : "default",
+    }}>
+      <span style={{ fontSize: 22, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>{icone}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 900, color: MARCO_COR, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Marco Clínico
+          </span>
+          <span style={{
+            background: "#EDE9FE", color: MARCO_COR, borderRadius: 20,
+            padding: "2px 10px", fontSize: 11, fontWeight: 800,
+          }}>{fmtDate(dateObj)}</span>
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 900, color: "#1E1B4B", marginBottom: m.descricao ? 4 : 0 }}>
+          {m.titulo}
+        </div>
+        {m.descricao && (
+          <div style={{ fontSize: 12, color: "#4B5563", lineHeight: 1.55 }}>
+            {m.descricao}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -521,13 +655,45 @@ function EmptyState() {
   );
 }
 
+function TimelineModal({ item, onClose }) {
+  if (!item) return null;
+  const meta = TYPE_META[item.type] || TYPE_META.marco;
+  const texto = fullItemText(item);
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.48)",zIndex:9500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:18}}>
+      <div style={{background:"#fff",borderRadius:16,border:"1px solid #DDE3EC",boxShadow:"0 18px 60px rgba(15,23,42,.28)",width:"min(920px,96vw)",maxHeight:"88vh",overflowY:"auto"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 16px",borderBottom:"1px solid #E2E8F0",background:meta.bg,borderRadius:"16px 16px 0 0"}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:950,color:meta.badgeTxt,textTransform:"uppercase",letterSpacing:.8}}>{meta.label} · {fmtDate(item.date)}</div>
+            <div style={{fontSize:18,fontWeight:950,color:N,lineHeight:1.2,marginTop:2}}>{itemTitle(item)||"Registro clínico"}</div>
+          </div>
+          <button type="button" onClick={()=>globalThis.navigator?.clipboard?.writeText(texto)} style={{border:"1px solid "+meta.border+"55",background:"#fff",color:N,borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>Copiar</button>
+          <button type="button" onClick={onClose} style={{border:"1px solid #CBD5E1",background:"#fff",color:"#475569",borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>Fechar</button>
+        </div>
+        <div style={{padding:18}}>
+          <BulletLines text={texto} color="#24364f" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function EvolutionTimeline({ exams = [], triages = [], evolucoes = [], onDelete }) {
+export default function EvolutionTimeline({ exams = [], triages = [], evolucoes = [], marcos = [], onDelete, onVoltar, onProsseguir, onConcluir }) {
   const [filtro, setFiltro] = useState("all");
   const [expanded, setExpanded] = useState({});
+  const [selecionado, setSelecionado] = useState(null);
 
   const rawItems = useMemo(() => ([
+    // ── Marcos clínicos (diagnóstico, início QT, APAC, etc.) ───────────────
+    ...marcos.map((m, index) => ({
+      date: parseTimelineDate(m.data || m.criadoEm || Date.now()),
+      type: "marco",
+      data: m,
+      index,
+    })),
+    // ── Exames / Laudos ────────────────────────────────────────────────────
     ...exams.map((e, index) => ({ e: normalizarExamTimeline(e), index }))
       .filter(({ e }) => deveExibirExamTimeline(e))
       .map(({ e, index }) => ({
@@ -536,6 +702,7 @@ export default function EvolutionTimeline({ exams = [], triages = [], evolucoes 
         data: e,
         index,
       })),
+    // ── Triagens e evoluções ───────────────────────────────────────────────
     ...triages.map((t, index) => {
       const tipo = String(t.tipo || t.fonte || t.__source || "").toLowerCase();
       const autor = String(t.autor || t.enfermeiroNome || "").toLowerCase();
@@ -553,7 +720,7 @@ export default function EvolutionTimeline({ exams = [], triages = [], evolucoes 
       data: ev,
       index,
     })),
-  ]), [exams, triages, evolucoes]);
+  ]), [exams, triages, evolucoes, marcos]);
 
   const items = useMemo(() => {
     const seen = new Set();
@@ -579,10 +746,11 @@ export default function EvolutionTimeline({ exams = [], triages = [], evolucoes 
       }
     });
     return {
-      all: unique.length,
-      exam: unique.filter(i => i.type === "exam").length,
-      evolucao: unique.filter(i => i.type === "evolucao").length,
-      triage: unique.filter(i => i.type === "triage").length,
+      all:     unique.length,
+      marco:   unique.filter(i => i.type === "marco").length,
+      exam:    unique.filter(i => i.type === "exam").length,
+      evolucao:unique.filter(i => i.type === "evolucao").length,
+      triage:  unique.filter(i => i.type === "triage").length,
     };
   }, [rawItems]);
 
@@ -599,11 +767,12 @@ export default function EvolutionTimeline({ exams = [], triages = [], evolucoes 
   if (!items.length) return <EmptyState />;
 
   const filtros = [
-    ["all", "Todos", counts.all, N],
-    ["exam", "Exames", counts.exam, G],
-    ["evolucao", "Evoluções", counts.evolucao, N],
-    ["triage", "Triagem", counts.triage, T],
-  ];
+    ["all",      "Todos",    counts.all,      N         ],
+    ["marco",    "Marcos",   counts.marco,    MARCO_COR ],
+    ["exam",     "Exames",   counts.exam,     G         ],
+    ["evolucao", "Evoluções",counts.evolucao, N         ],
+    ["triage",   "Triagem",  counts.triage,   T         ],
+  ].filter(([id,, count]) => id === "all" || count > 0);
 
   return (
     <div style={{
@@ -629,6 +798,8 @@ export default function EvolutionTimeline({ exams = [], triages = [], evolucoes 
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {onVoltar && <button type="button" onClick={onVoltar} style={{border:"1px solid #CBD5E1",background:"#fff",color:N,borderRadius:999,padding:"5px 10px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>← Voltar</button>}
+          <button type="button" onClick={()=>globalThis.navigator?.clipboard?.writeText(items.map(fullItemText).join("\n\n---\n\n"))} style={{border:"1px solid "+T+"55",background:"#F0F9FF",color:T,borderRadius:999,padding:"5px 10px",fontSize:11,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>Copiar</button>
           {filtros.map(([id, label, count, color]) => (
             <button
               key={id}
@@ -657,9 +828,10 @@ export default function EvolutionTimeline({ exams = [], triages = [], evolucoes 
         const limite = aberta ? group.list.length : 5;
         const visiveis = group.list.slice(0, limite);
         const hidden = group.list.length - visiveis.length;
+        const cMarco= group.list.filter(i => i.type === "marco").length;
         const cExam = group.list.filter(i => i.type === "exam").length;
         const cEvol = group.list.filter(i => i.type === "evolucao").length;
-        const cTri = group.list.filter(i => i.type === "triage").length;
+        const cTri  = group.list.filter(i => i.type === "triage").length;
 
         return (
           <section key={group.key} style={{
@@ -692,22 +864,25 @@ export default function EvolutionTimeline({ exams = [], triages = [], evolucoes 
               flexWrap: "wrap",
             }}>
               <div>
-                <div style={{ color: N, fontSize: 16, fontWeight: 900 }}>{fmtDate(group.date)}</div>
-                <div style={{ color: "#64748B", fontSize: 11 }}>{group.list.length} registro(s) neste dia</div>
+                <div style={{ color: N, fontSize: 12, fontWeight: 900 }}>{fmtDate(group.date)}</div>
+                <div style={{ color: "#64748B", fontSize: 10 }}>{group.list.length} registro(s) neste dia</div>
               </div>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                {cExam > 0 && <Pill label={`${cExam} exame(s)`} color={G} />}
-                {cEvol > 0 && <Pill label={`${cEvol} evolução(ões)`} color={N} />}
-                {cTri > 0 && <Pill label={`${cTri} triagem(ns)`} color={T} />}
+                {cMarco> 0 && <Pill label={`${cMarco} marco(s)`}      color={MARCO_COR} />}
+                {cExam > 0 && <Pill label={`${cExam} exame(s)`}       color={G} />}
+                {cEvol > 0 && <Pill label={`${cEvol} evolução(ões)`}  color={N} />}
+                {cTri  > 0 && <Pill label={`${cTri} triagem(ns)`}     color={T} />}
               </div>
             </div>
 
             <div style={{ display: "grid", gap: 8 }}>
               {visiveis.map((item, i) => (
                 <div key={itemSignature(item) + i}>
-                  {item.type === "exam"
-                    ? <ExamCard e={item.data} dateObj={item.date} onDelete={onDelete ? () => onDelete(item) : null} />
-                    : <TriageCard t={item.data} dateObj={item.date} onDelete={onDelete ? () => onDelete(item) : null} />}
+                  {item.type === "marco"
+                    ? <MarcoCard m={item.data} dateObj={item.date} onOpen={()=>setSelecionado(item)} />
+                    : item.type === "exam"
+                    ? <ExamCard e={item.data} dateObj={item.date} onOpen={()=>setSelecionado(item)} onDelete={onDelete ? () => onDelete(item) : null} />
+                    : <TriageCard t={item.data} dateObj={item.date} onOpen={()=>setSelecionado(item)} onDelete={onDelete ? () => onDelete(item) : null} />}
                 </div>
               ))}
             </div>
@@ -754,6 +929,13 @@ export default function EvolutionTimeline({ exams = [], triages = [], evolucoes 
           </section>
         );
       })}
+      {(onProsseguir || onConcluir) && (
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",borderTop:"1px solid #E2E8F0",paddingTop:10}}>
+          {onProsseguir && <button type="button" onClick={onProsseguir} style={{border:"none",background:N,color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>Prosseguir →</button>}
+          {onConcluir && <button type="button" onClick={onConcluir} style={{border:"none",background:VE,color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12,fontWeight:900,cursor:"pointer",fontFamily:"inherit"}}>Concluir atendimento e salvar</button>}
+        </div>
+      )}
+      <TimelineModal item={selecionado} onClose={()=>setSelecionado(null)} />
     </div>
   );
 }

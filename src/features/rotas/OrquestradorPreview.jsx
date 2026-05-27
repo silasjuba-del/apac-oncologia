@@ -41,7 +41,7 @@ const sc = {
 const SECOES = [
   { id:'identificacao', titulo:'🪪 Identificação',      campos:['nome','nasc','sexo','cpf','cns','mae','cidade','telefone'] },
   { id:'clinico',       titulo:'🩺 Dados Clínicos',     campos:['diag','cid','tnm','estadio','ecog','bio','trat','linha','intencao','grau_hist','subtipo','margens','data_biopsia'] },
-  { id:'laudos',        titulo:'🔬 Laudos',              campos:['anatom','imagen','exames_resumo'] },
+  { id:'laudos',        titulo:'🔬 Laudos',              campos:['anatom','imagen','exames_resumo','textoColar'] },
   { id:'social',        titulo:'🏠 Determinantes Sociais', campos:['cidade_origem','necessita_tfd','necessita_transporte','necessita_assist_social','acompanhante_nome'] },
   { id:'anamnese',      titulo:'📋 Anamnese',           campos:['queixa_principal','medicacoes_em_uso','alergias','historia_familiar','comorbidades','tabagismo','etilismo'] },
 ];
@@ -53,7 +53,7 @@ const LABEL = {
   ecog:'ECOG', bio:'Biomarcadores', trat:'Protocolo', linha:'Linha', intencao:'Intenção',
   grau_hist:'Grau histológico', subtipo:'Subtipo molecular', margens:'Margens cirúrgicas',
   data_biopsia:'Data da biópsia',
-  anatom:'Anatomopatológico (AP)', imagen:'Imagem (TC/PET/RNM)', exames_resumo:'Resumo exames',
+  anatom:'Anatomopatológico (AP)', imagen:'Imagem (TC/PET/RNM)', exames_resumo:'Resumo exames', textoColar:'Texto colado (recepção)',
   cidade_origem:'Cidade de Origem', necessita_tfd:'Precisa TFD?',
   necessita_transporte:'Precisa Transporte?', necessita_assist_social:'Assist. Social?',
   acompanhante_nome:'Acompanhante',

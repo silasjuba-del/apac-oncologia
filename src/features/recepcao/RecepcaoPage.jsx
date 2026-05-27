@@ -10,6 +10,7 @@ import { N, T, G, VE, AM, VM, BG, AUTOR, AUTOR2, HOSP, EQUIPE, abrirDrive, PAC0,
 import { sc_, Btn, H2, H3, Fld, Bge, ResumoBullets, TopBar, Footer, PrintModal, ChatAba, limparMarkdown, NOW } from "../../components/ui/primitives";
 import { savePacAtual } from "../../utils/storage.js";
 import { dbSalvarPaciente } from "../../utils/db.js";
+import { _backendHeaders, _clinicKeyHeaders } from "../../utils/api.js";
 import PacienteDemograficoForm from "../../pages/PacienteDemograficoForm";
 import AgendamentoComp from "../../components/shared/AgendamentoComp";
 import ListaEsperaPrioridade from "../../components/shared/ListaEsperaPrioridade";
@@ -45,13 +46,66 @@ export default function RecepcaoPage({
   const [pacRecSel,setPacRecSel]=useState(null);
   const [driveAbertoRec,setDriveAbertoRec]=useState(false);
   const [loadingIA,setLoadingIA]=useState(false);
+  const [textoColar,setTextoColar]=useState("");
+
+  // ── Extrator de texto colado ────────────────────────────────────────────────
+  const extrairCampoTextoRec=(texto,rotulos)=>{
+    const linhas=String(texto||"").split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    for(const rotulo of rotulos){
+      const re=new RegExp("^\\s*(?:[*•\\-]\\s*)?(?:\\*\\*)?"+rotulo+"(?:\\*\\*)?\\s*[:\\-–]\\s*(.+)$","i");
+      const achou=linhas.find(l=>re.test(l));
+      if(achou)return achou.replace(re,"$1").replace(/\*\*/g,"").replace(/[.;]\s*$/,"").trim();
+    }
+    return "";
+  };
+  const fmtCEP=v=>String(v||"").replace(/\D/g,"").slice(0,8).replace(/^(\d{5})(\d)/,"$1-$2");
+  const fmtTel=v=>{const d=String(v||"").replace(/\D/g,"").slice(0,11);return d.length<=10?d.replace(/^(\d{2})(\d{4})(\d)/,"($1) $2-$3"):d.replace(/^(\d{2})(\d{5})(\d)/,"($1) $2-$3");};
+  const parseEndRec=endereco=>{
+    const bruto=String(endereco||"").replace(/\*\*/g,"").replace(/[.;]\s*$/,"").trim();
+    const cep=(bruto.match(/\b\d{5}-?\d{3}\b/)||[])[0]||"";
+    const uf=(bruto.match(/[-/]\s*([A-Z]{2})\b/i)||[])[1]||"";
+    const cidade=(bruto.match(/,\s*([^,]+?)\s*[-/]\s*[A-Z]{2}\b/i)||[])[1]||"";
+    const bairro=(bruto.match(/\bbairro\s+([^,()]+)/i)||[])[1]||"";
+    const numero=(bruto.match(/\bn[uú]mero\s+([^,()]+)/i)||bruto.match(/\bn[ºo.]?\s*(\d+)/i)||[])[1]||"";
+    const logradouro=(bruto.split(/,\s*(?:n[uú]mero|n[ºo.]?)/i)[0]||bruto).trim();
+    return {cep:fmtCEP(cep),uf:uf.toUpperCase(),cidade:cidade.trim(),bairro:bairro.trim(),numero:numero.trim(),logradouro};
+  };
+  const aplicarColarRec=()=>{
+    const txt=textoColar;
+    if(!txt.trim())return;
+    const cpf=(txt.match(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/)||[])[0]||"";
+    const nasc=(txt.match(/\b\d{2}\/\d{2}\/\d{4}\b/)||txt.match(/\b\d{2}-\d{2}-\d{4}\b/)||[])[0]||"";
+    const tel=(txt.match(/\(?\d{2}\)?\s?9?\d{4,5}-?\d{4}/)||[])[0]||"";
+    const cns=extrairCampoTextoRec(txt,["cns","cart[aã]o sus","cartao sus","sus"])||((txt.match(/\b\d{15}\b/)||[])[0]||"");
+    const endTxt=extrairCampoTextoRec(txt,["endere[cç]o"])||"";
+    const end=parseEndRec(endTxt);
+    const campos={
+      nome:extrairCampoTextoRec(txt,["nome completo","nome","paciente"])||pac.nome||"",
+      nasc:extrairCampoTextoRec(txt,["data de nascimento","nascimento","nasc"])||nasc||pac.nasc||"",
+      sexo:extrairCampoTextoRec(txt,["sexo"])||pac.sexo||"",
+      pai:extrairCampoTextoRec(txt,["nome do pai","pai","filia[cç][aã]o \\(pai\\)"])||pac.pai||"",
+      mae:extrairCampoTextoRec(txt,["filia[cç][aã]o \\(m[aã]e\\)","nome da m[aã]e","m[aã]e"])||pac.mae||"",
+      rg:extrairCampoTextoRec(txt,["rg","documento de identidade"])||pac.rg||"",
+      cpf:extrairCampoTextoRec(txt,["cpf"])||cpf||pac.cpf||"",
+      cns:extrairCampoTextoRec(txt,["cart[aã]o nacional de sa[uú]de \\(cns\\)","cart[aã]o nacional de sa[uú]de","cns","cart[aã]o sus"])||cns||pac.cns||"",
+      naturalidade:extrairCampoTextoRec(txt,["naturalidade"])||pac.naturalidade||"",
+      tel:fmtTel(extrairCampoTextoRec(txt,["telefone principal","telefone de contato","telefone","celular","whatsapp","tel"])||tel||pac.tel||""),
+      logradouro:extrairCampoTextoRec(txt,["logradouro","rua"])||end.logradouro||pac.logradouro||"",
+      numero:extrairCampoTextoRec(txt,["n[uú]mero","numero"])||end.numero||pac.numero||"",
+      bairro:extrairCampoTextoRec(txt,["bairro"])||end.bairro||pac.bairro||"",
+      cidade:extrairCampoTextoRec(txt,["cidade onde mora","munic[ií]pio","cidade"])||end.cidade||pac.cidade||"",
+      uf:(extrairCampoTextoRec(txt,["uf","estado"])||end.uf||pac.uf||"PB").toUpperCase(),
+      cep:extrairCampoTextoRec(txt,["cep"])||end.cep||pac.cep||"",
+      local_cancer:extrairCampoTextoRec(txt,["local do c[aâ]ncer","c[aâ]ncer","tumor","diagn[oó]stico","local"])||pac.local_cancer||"",
+      queixa:extrairCampoTextoRec(txt,["queixa","motivo","sintoma"])||pac.queixa||"",
+    };
+    Object.entries(campos).forEach(([k,v])=>{if(v)up(k,v);});
+  };
   const [resultadoIA,setResultadoIA]=useState(null);
   const [agentesAtivos,setAgentesAtivos]=useState([]);
   const cidSugeridoRecepcao=getCIDPorSede(pac?.local_cancer);
-  useEffect(()=>{
-    if(pacRecSel!==null)return;
-    if(pac?.nome&&pac?.status==="aguardando_recepcao")setPacRecSel(pac);
-  },[pacRecSel,pac?.pacID,pac?.nome,pac?.status]);
+  // Fluxo correto: paciente envia → aparece na lista → secretaria clica → abre ficha
+  // Removido auto-select: a secretaria deve clicar no nome do paciente na lista.
   const ativarAgentesRecepcao=(origem="upload")=>{
     const agentes=[
       {nome:"Prontuário IA",txt:"resumo clínico em preparo"},
@@ -100,24 +154,49 @@ PENDÊNCIAS:
 
 Paciente: ${pac.nome||"—"} Nasc: ${pac.nasc||"—"} CPF: ${pac.cpf||"—"} CNS: ${pac.cns||"—"}
 Cidade: ${pac.cidade||"—"} Queixa: ${pac.queixa||"—"}
+Texto colado pela recepção:
+${textoColar||"nenhum"}
 Arquivos: ${upFiles.map(a=>a.n).join(", ")||"nenhum"}`;
     let res="";
     let backendOk=false;
     const _url=apiUrl?apiUrl():import.meta.env.VITE_API_URL||"http://127.0.0.1:3001";
+    const textoLivreIA=[
+      textoColar,
+      pac?.anatom,
+      pac?.imagen,
+      pac?.exames_resumo,
+      pac?.docs_ia_resumo,
+    ].filter(x=>String(x||"").trim()).join("\n\n");
+    const aguardar=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+    const linhasResumoLocal=()=>String(textoLivreIA||"").split(/\r?\n/).map(l=>l.trim()).filter(Boolean).slice(0,10);
     try{
       const fd=new FormData();
+      const pacienteId=Number(pac?.id||pac?.paciente_id)||0;
+      if(pacienteId)fd.set("paciente_id",String(pacienteId));
       fd.set("paciente_json",JSON.stringify(pac||{}));
       fd.set("recepcao_json",JSON.stringify({origem:"recepcao"}));
       fd.set("prompt_modelo",prompt);
+      if(textoLivreIA.trim())fd.set("texto_livre",textoLivreIA);
       upFiles.forEach(a=>{if(a.obj&&["application/pdf","image/jpeg","image/png","image/webp"].includes(a.obj.type||(/\.pdf$/i.test(a.n)?"application/pdf":""))){fd.append("laudos",a.obj,a.n);fd.append("tipos",a.tp||"Documento");fd.append("datas",new Date().toISOString().slice(0,10));}});
-      if(filesPayload.length){
-        const r=await fetch(_url+"/api/dossie/gerar",{method:"POST",body:fd});
+      if(filesPayload.length||textoLivreIA.trim()){
+        const r=await fetch(_url+"/api/dossie/gerar",{method:"POST",headers:_clinicKeyHeaders(),body:fd});
         const d=await r.json().catch(()=>({}));
-        if(r.ok&&d.ok){res=d.resumo||d.text||"";backendOk=!!res;}
+        if(r.ok&&d.ok){
+          res=d.resumo||d.text||d.resumo_claude||d.data?.resumo||d.data?.text||"";
+          if(!res&&d.dossieId&&pacienteId){
+            for(let tentativa=0;tentativa<18;tentativa++){
+              await aguardar(2500);
+              const s=await fetch(_url+"/api/dossie/status/"+encodeURIComponent(d.dossieId)+"?paciente_id="+encodeURIComponent(pacienteId),{headers:_clinicKeyHeaders()}).then(x=>x.json()).catch(()=>({}));
+              if(s.status_analise==="concluido"&&s.resumo_claude){res=s.resumo_claude;break;}
+              if(s.status_analise==="erro"){res="";break;}
+            }
+          }
+          backendOk=!!res;
+        }
       }
     }catch(_){}
     if(!backendOk){
-      try{const r=await fetch(_url+"/api/claude/resumo",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt,maxTokens:1400,files:filesPayload})});const d=await r.json().catch(()=>({}));if(r.ok&&d.ok)res=d.text||"";else res="⚠ "+(d.message||("Erro HTTP "+r.status));}catch(e){res="⚠ Backend indisponível: "+e.message;}
+      try{const r=await fetch(_url+"/api/claude/resumo",{method:"POST",headers:_backendHeaders(),body:JSON.stringify({prompt,maxTokens:1400,files:filesPayload})});const d=await r.json().catch(()=>({}));if(r.ok&&d.ok)res=d.text||"";else res="⚠ "+(d.message||("Erro HTTP "+r.status));}catch(e){res="⚠ Backend indisponível: "+e.message;}
     }
     if(!res)res=`DADOS CLÍNICOS:
 Antecedentes patológicos:
@@ -142,6 +221,33 @@ LAUDOS EM CRONOLOGIA:
 PENDÊNCIAS:
 • Definir diagnóstico e CID-10
 • Anexar laudo comprobatório`;
+    if(/^âš |^⚠|backend indispon|erro http|claude/i.test(String(res||"").trim()))res=`DADOS CLÍNICOS:
+Antecedentes patológicos:
+Medicações de uso contínuo:
+Alergias:
+Cirurgias prévias:
+Calendário vacinal:
+Histórico familiar:
+
+DADOS ONCOLÓGICOS:
+Tipo de tumor:
+Sede tumoral: ${pac.local_cancer||""}
+Estadiamento/TNM:
+Estágio:
+Subtipo:
+Biomarcadores:
+CID-10:
+ECOG:
+
+LAUDOS EM CRONOLOGIA:
+
+PENDÊNCIAS:
+• Definir diagnóstico e CID-10
+• Anexar laudo comprobatório
+• IA/backend indisponível no momento; rascunho local criado para não travar o fluxo.`;
+    if(linhasResumoLocal().length&&/LAUDOS EM CRONOLOGIA:\s*\n\s*PEND/i.test(res)){
+      res=res.replace(/(LAUDOS EM CRONOLOGIA:\s*)\n(\s*PEND)/i,`$1\n${linhasResumoLocal().map(l=>"• "+l).join("\n")}\n\n$2`);
+    }
     res=limparMarkdown(res);
     const camposIA=extrairCamposIA?extrairCamposIA(res):{};
     if(up&&Object.keys(camposIA).length){Object.entries(camposIA).forEach(([k,v])=>{if(v&&!pac[k])up(k,v);});}
@@ -150,9 +256,10 @@ PENDÊNCIAS:
     const pacMescladoIA={...pac,...Object.fromEntries(Object.entries(camposIA).filter(([k,v])=>v&&!pac[k]))};
     if(setDossie)setDossie(d=>{
       const base=criarDossieInicial?d||criarDossieInicial(pacMescladoIA):d||{paciente:pacMescladoIA,documentos:[],status:"novo"};
+      const resumoDiagramado=limparMarkdown(res||"").trim();
       const evolucaoClaude=extrairEvolucaoIA?extrairEvolucaoIA(res):"";
       const doc={id:Date.now(),tipo:"Análise IA Recepção",nome:upFiles[0]?.n||"Análise clínica IA",resumo:res,origem:"recepcao_ia",criadoEm:NOW(),exames:extrairExamesRealizadosTexto?extrairExamesRealizadosTexto(res):{},evolucaoClaude};
-      const novo={...base,paciente:{...(base.paciente||{}),...pacMescladoIA},documentos:[doc,...(base.documentos||[])],resumoClaude:[base.resumoClaude,res].filter(Boolean).join("\n\n"),evolucao:{...(base.evolucao||{}),rascunho:evolucaoClaude||base.evolucao?.rascunho||""},status:"documentos_anexados",updatedAt:NOW()};
+      const novo={...base,paciente:{...(base.paciente||{}),...pacMescladoIA},documentos:[doc,...(base.documentos||[])],resumoClaude:[base.resumoClaude,res].filter(Boolean).join("\n\n"),evolucao:{...(base.evolucao||{}),rascunho:evolucaoClaude||resumoDiagramado||base.evolucao?.rascunho||"",textoFinal:base.evolucao?.textoFinal||""},status:"documentos_anexados",updatedAt:NOW()};
       return orquestrarDossieAtendimento?orquestrarDossieAtendimento(novo,"secretaria_upload_ia"):novo;
     });
     ativarAgentesRecepcao("IA da secretaria");
@@ -264,13 +371,16 @@ ${HOSP}`:"";
                     onMouseLeave={e=>e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,.05)"}>
                     <div style={{width:42,height:42,borderRadius:"50%",background:statusColor+"18",border:`2px solid ${statusColor}`,display:"grid",placeItems:"center",fontSize:20,flexShrink:0}}>🧑‍⚕️</div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:14,fontWeight:900,color:N,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.nome||"Paciente sem nome"}</div>
+                      <div style={{fontSize:14,fontWeight:900,color:N,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"flex",alignItems:"center",gap:6}}>
+                        {p.nome||"Paciente sem nome"}
+                        {p.origem==="paciente"&&<span style={{background:"#E0F2FE",color:"#0369A1",borderRadius:6,padding:"1px 7px",fontSize:10,fontWeight:800,flexShrink:0}}>📱 Portal</span>}
+                      </div>
                       <div style={{fontSize:11,color:"#64748B",marginTop:2}}>
                         {p.proto&&<span style={{marginRight:8}}>📋 {p.proto}</span>}
                         {p.chegada&&<span>⏰ {p.chegada}</span>}
                       </div>
                     </div>
-                    <span style={{background:statusColor+"22",color:statusColor,border:`1px solid ${statusColor}55`,borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:800,flexShrink:0}}>{statusLabel}</span>
+                    <span style={{background:statusColor+"22",color:statusColor,border:`1px solid ${statusColor}55`,borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:800,flexShrink:0}}>{p.origem==="paciente"?"✅ Dados prontos":statusLabel}</span>
                     <span style={{color:"#CBD5E1",fontSize:18}}>›</span>
                   </div>;
                 })}
@@ -289,6 +399,29 @@ ${HOSP}`:"";
             </div>
           </div>
 
+          {/* ── Caixa Colar Dados ────────────────────────────── */}
+          <div style={{border:`1.5px dashed ${T}`,borderRadius:13,background:"#F0F9FF",padding:"13px 15px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:8}}>
+              <div>
+                <div style={{fontSize:12,color:T,fontWeight:950,textTransform:"uppercase",letterSpacing:.6}}>📋 Colar dados do paciente</div>
+                <div style={{fontSize:11,color:"#64748B",marginTop:2}}>Cole identificação, contato e endereço. Clique em <b>Preencher campos</b> para distribuir automaticamente.</div>
+              </div>
+              <button type="button" onClick={aplicarColarRec} style={{background:T,color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontWeight:900,fontSize:12,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0,boxShadow:"0 2px 8px rgba(43,122,140,.25)"}}>
+                Preencher campos
+              </button>
+            </div>
+            <textarea
+              value={textoColar}
+              onChange={e=>setTextoColar(e.target.value)}
+              rows={5}
+              placeholder={"Exemplo:\n* **Nome completo:** Katiana Bezerra da Silva.\n* **Data de nascimento:** 15/03/1978.\n* **CPF:** 123.456.789-00.\n* **CNS:** 702809628289962.\n* **Mãe:** Maria José Bezerra.\n* **Pai:** João Bezerra.\n* **Sexo:** Feminino.\n* **Naturalidade:** Patos - PB.\n* **Endereço:** Rua das Flores, número 123, Bairro Centro, Patos - PB, CEP 58700-000.\n* **Telefone:** (83) 99999-9999."}
+              style={{width:"100%",minHeight:110,border:"1.5px solid #BAE6FD",borderRadius:9,padding:"9px 11px",fontSize:12,fontFamily:"Segoe UI, Arial, sans-serif",resize:"vertical",outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}
+            />
+            {textoColar.trim()&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:6}}>
+              <button type="button" onClick={()=>setTextoColar("")} style={{background:"none",border:"none",color:"#94A3B8",fontSize:11,cursor:"pointer",fontFamily:"inherit",padding:"2px 6px"}}>✕ limpar</button>
+            </div>}
+          </div>
+
           {/* Card: Dados Demográficos */}
           <div style={sc_.card()}>
             <H2 ch="👤 Dados Demográficos"/>
@@ -297,11 +430,21 @@ ${HOSP}`:"";
               <Fld l="Data de Nasc." val={pac.nasc||""} set={v=>up("nasc",v)} ph="DD/MM/AAAA"/>
               <div><label style={{fontSize:11,fontWeight:800,color:N,textTransform:"uppercase",display:"block",marginBottom:4}}>Sexo</label><select value={pac.sexo||""} onChange={e=>up("sexo",e.target.value)} style={{...sc_.inp,fontSize:12,marginBottom:8}}><option value="">Selecionar...</option><option>Feminino</option><option>Masculino</option><option>Outro</option></select></div>
               <Fld l="CPF" val={pac.cpf||""} set={v=>up("cpf",v)} ph="000.000.000-00"/>
-              <Fld l="CNS (Cartão SUS)" val={pac.cns||""} set={v=>up("cns",v)} ph="000 0000 0000 0000"/>
+              <Fld l="RG / Documento" val={pac.rg||""} set={v=>up("rg",v)} ph="Opcional"/>
+              <Fld l="Cartão SUS" val={pac.cns||""} set={v=>up("cns",v)} ph="000 0000 0000 0000"/>
               <Fld l="Telefone" val={pac.tel||""} set={v=>up("tel",v)} ph="(00) 90000-0000"/>
-              <Fld l="Naturalidade" val={pac.naturalidade||""} set={v=>up("naturalidade",v)} ph="Cidade / UF de nascimento"/>
+              <Fld l="Cidade onde nasceu" val={pac.naturalidade||""} set={v=>up("naturalidade",v)} ph="Cidade / UF de nascimento"/>
+              <Fld l="Nome do Pai" val={pac.pai||""} set={v=>up("pai",v)} ph="Nome completo do pai"/>
               <Fld l="Nome da Mãe" val={pac.mae||""} set={v=>up("mae",v)} ph="Nome completo da mãe"/>
               <div><label style={{fontSize:11,fontWeight:800,color:N,textTransform:"uppercase",display:"block",marginBottom:4}}>Convênio</label><select value={pac.convenio||""} onChange={e=>up("convenio",e.target.value)} style={{...sc_.inp,fontSize:12,marginBottom:8}}><option value="">Selecionar...</option><option>SUS</option><option>Unimed</option><option>Bradesco Saúde</option><option>Hapvida</option><option>Particular</option></select></div>
+              <div style={{gridColumn:"1/-1",fontSize:11,fontWeight:900,color:N,textTransform:"uppercase",letterSpacing:.5,borderTop:"1.5px solid #F1F5F9",paddingTop:10,marginTop:4}}>Endereço residencial</div>
+              <Fld l="Endereço" val={pac.logradouro||""} set={v=>up("logradouro",v)} ph="Rua, sítio, fazenda..."/>
+              <Fld l="Número" val={pac.numero||""} set={v=>up("numero",v)} ph="S/N"/>
+              <Fld l="Bairro" val={pac.bairro||""} set={v=>up("bairro",v)} ph="Bairro"/>
+              <Fld l="Cidade" val={pac.cidade||""} set={v=>up("cidade",v)} ph="Município"/>
+              <Fld l="UF" val={pac.uf||""} set={v=>up("uf",v.toUpperCase())} ph="PB"/>
+              <Fld l="CEP" val={pac.cep||""} set={v=>up("cep",v)} ph="58700-000"/>
+              <div style={{gridColumn:"1/-1",fontSize:11,fontWeight:900,color:N,textTransform:"uppercase",letterSpacing:.5,borderTop:"1.5px solid #F1F5F9",paddingTop:10,marginTop:4}}>Oncologia</div>
               <div style={{gridColumn:"1/-1"}}>
                 <Fld l="Sede tumoral / local do câncer" val={pac.local_cancer||""} set={v=>up("local_cancer",v)} ph="Ex: mama, pulmão, intestino, próstata, colo do útero"/>
                 {pac.local_cancer&&<div style={{background:cidSugeridoRecepcao?"#EAF7EE":"#F8FAFC",border:"1px solid "+(cidSugeridoRecepcao?VE:"#CBD5E1"),borderRadius:9,padding:"7px 10px",fontSize:11,color:cidSugeridoRecepcao?VE:"#64748B",fontWeight:800,marginTop:-4,marginBottom:8}}>
@@ -379,7 +522,7 @@ ${HOSP}`:"";
           {/* Confirm buttons */}
           <div style={{display:"grid",gap:8}}>
             <Btn v="gold" ch="✅ Confirmar e Enviar ao Médico" s={{width:"100%",fontSize:14,padding:13}} onClick={()=>{if(!pac.nome){alert("Informe o nome do paciente.");return;}if(onEnviar)onEnviar("prontuario");else alert("Paciente registrado com sucesso!");}}/>
-            <Btn v="ghost" ch="🔬 Rota 2: Módulo v1.1" s={{width:"100%",fontSize:12,padding:10}} onClick={()=>{if(!pac.nome){alert("Informe o nome do paciente.");return;}if(onEnviar)onEnviar("modulos_v11");else alert("Paciente registrado com sucesso!");}}/>
+            <Btn v="ghost" ch="🔬 Rota 2: Módulo v1.1" s={{width:"100%",fontSize:12,padding:10}} onClick={()=>{if(!pac.nome){alert("Informe o nome do paciente.");return;}if(onEnviar)onEnviar("modulos_v11",{textoColar});else alert("Paciente registrado com sucesso!");}}/>
           </div>
         </>}
 

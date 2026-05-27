@@ -31,11 +31,23 @@ class AppErrorBoundary extends React.Component {
   }
 }
 
+function AppFallback(){
+  return (
+    <div style={{minHeight:'100vh',display:'grid',placeItems:'center',background:'#EEF2F7',fontFamily:'Georgia,serif',padding:20}}>
+      <div style={{background:'#fff',border:'1px solid #CBD5E1',borderRadius:14,padding:'18px 22px',color:'#1B365D',fontWeight:900,boxShadow:'0 8px 24px rgba(15,23,42,.08)'}}>
+        Carregando APPONCOHB...
+      </div>
+    </div>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AppErrorBoundary>
       <EncounterProvider>
-        <App />
+        <React.Suspense fallback={<AppFallback />}>
+          <App />
+        </React.Suspense>
       </EncounterProvider>
     </AppErrorBoundary>
   </React.StrictMode>

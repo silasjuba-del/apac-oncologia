@@ -5,11 +5,11 @@
 import React, { useState } from "react";
 import { N, T, VE, TIPOS_IMAGEM } from "../../utils/constants";
 import { sc_, sc, H2, Fld, Btn, TODAY } from "../../components/ui/primitives";
-import { chamarClaude } from "../../utils/api";
+import { agentCallText, AGENT_INTENTS } from "../../utils/agentGateway";
 
 async function IA_resumirExame(textoOuDescricao,tipoExame,pac){
   const prompt=`Você é um oncologista assistente. Analise este ${tipoExame} e forneça um resumo EXCLUSIVAMENTE com foco oncológico para o prontuário. Destaque: localização/tamanho tumoral, invasão local, linfonodos, metástases, resposta ao tratamento (se aplicável). Mencione achados não-oncológicos APENAS em 1 linha separada. Seja conciso e objetivo.\n\nPACIENTE: ${pac?.nome||"—"} | DIAGNÓSTICO: ${pac?.diag||"—"}\nCONTEÚDO DO EXAME: ${textoOuDescricao}`;
-  return await chamarClaude(prompt,600);
+  return await agentCallText({prompt,maxTokens:600,intent:AGENT_INTENTS.RESUMO_EXAME,pac});
 }
 export default function AbaExamesImagem({pac,up}){
   const [exames,setExames]=useState(pac?.exames_imagem||[]);

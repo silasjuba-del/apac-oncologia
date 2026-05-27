@@ -6,7 +6,7 @@ import React from "react";
 import { N, G, T } from "../../utils/constants";
 import { sc_, H2, Bge } from "../../components/ui/primitives";
 
-export default function AtendimentoSegurancaPanel({pac,dossie,onConcluir,onNovo,onLimparTestes}){
+export default function AtendimentoSegurancaPanel({pac,dossie,onConcluir,onNovo,onLimparTestes,onZerarTudo}){
   const docs=dossie?.documentos?.length||0;
   const evolucoes=pac?.evolucoes?.length||0;
   const nome=pac?.nome||"Nenhum paciente ativo";
@@ -56,6 +56,10 @@ export default function AtendimentoSegurancaPanel({pac,dossie,onConcluir,onNovo,
       <button onClick={onLimparTestes} style={{...sc_.btn("red",{padding:18,textAlign:"left",borderRadius:12})}}>
         <div style={{fontSize:18}}>🧹 Limpar pacientes de teste</div>
         <div style={{fontSize:12,fontWeight:700,opacity:.9,marginTop:4}}>Remove apenas registros com nomes de teste/demo/codex; não apaga prontuários reais.</div>
+      </button>
+      <button onClick={onZerarTudo} style={{...sc_.btn("red",{padding:18,textAlign:"left",borderRadius:12,background:"#7B1D3A"})}}>
+        <div style={{fontSize:18}}>Zerar todos os atendimentos locais</div>
+        <div style={{fontSize:12,fontWeight:700,opacity:.9,marginTop:4}}>Remove todos os pacientes, filas, dossies, consultas, rascunhos e resultados deste navegador. Cria backup antes.</div>
       </button>
     </div>
   </div>;

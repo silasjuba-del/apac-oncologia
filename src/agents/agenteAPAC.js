@@ -1,6 +1,19 @@
 // src/agents/agenteAPAC.js
 // Agente APAC Oncológica — APACApp v1.0 (convertido de TypeScript)
 // Hospital do Bem — Patos/PB — Dr. Silas Negrão — CRM-PB 17341
+//
+// ⚠  DEPRECADO — F3 (2025-05)
+//
+// Os validadores/formatadores abaixo foram extraídos para:
+//   → src/utils/validators.js   (validarCPF, validarCNS, calcularIdade,
+//                                  formatarCPF, formatarTelefone, formatarCEP…)
+//
+// A classe AgenteAPACOncologica NÃO é importada em nenhuma parte do projeto
+// (zero imports detectados na auditoria F3). Permanece aqui apenas para não
+// quebrar possível referência futura e para histórico.
+//
+// Para novas chamadas de IA: use src/utils/agentGateway.js → agentCall()
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Validadores utilitários ──────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@
 // Paleta: azul marinho, dourado, branco, bordô, preto, fundo levemente acinzentado
 // Carrossel com transição CSS ao trocar de aba
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useTransition } from "react";
 
 // ── PALETA v4 ──────────────────────────────────────────────────────────────────
 export const C = {
@@ -51,14 +51,13 @@ export const TABS_PERFIL = {
     { id: "dashboard",  ico: "📊", label: "Dashboard"     },
     { id: "fila",       ico: "📥", label: "Atendimentos"  },
     { id: "pacientes",  ico: "👥", label: "Pacientes"     },
-    { id: "prontuario", ico: "📋", label: "Prontuário"    },
-    { id: "upload_modulo", ico: "📤", label: "Upload"      },
-    { id: "prescricao", ico: "💉", label: "Prescrição médica"  },
+    { id: "prontuario", ico: "📋", label: "Prontuário"   },
+    { id: "ia_agent",   ico: "🤖", label: "Assistente IA" },
     { id: "apac",       ico: "📄", label: "APAC"          },
     { id: "triagem_recebe", ico: "📥", label: "Enfermagem" },
     { id: "discussao_clinica", ico: "⚖️", label: "Discussão Clínica" },
-    { id: "ia",         ico: "🤖", label: "Assistente IA" },
     { id: "admin",      ico: "⚙️", label: "Admin"         },
+    { id: "apagar_dados", ico: "🗑", label: "Apagar Dados" },
   ],
   recepcao: [
     { id: "buscar",      ico: "🔍", label: "Buscar Paciente" },
@@ -262,15 +261,21 @@ function CarouselContent({ activeTab, children }) {
 export default function AppShell({
   perfil        = "medico",
   activeTab,
-  onTabChange,
+  onTabChange: _onTabChange,
   pac,
   fluxoStatus,
   onTrocarPerfil,
   alertCount    = 0,
   msgCount      = 0,
+  sidebarTop,
   headerRight,
   children,
 }) {
+  // startTransition: evita "suspended while responding to synchronous input"
+  // quando a sidebar aciona um componente React.lazy pela primeira vez.
+  const [, startTransition] = useTransition();
+  const onTabChange = (id) => startTransition(() => _onTabChange(id));
+
   const tabs     = (TABS_PERFIL[perfil] || TABS_PERFIL.medico).map(t =>
     perfil === "medico" && t.id === "triagem_recebe"
       ? { id: "enfermagem", ico: "🩺", label: "Enfermagem" }
@@ -332,6 +337,7 @@ export default function AppShell({
             borderRadius:8,
             padding:"7px 10px",
             border:"1px solid rgba(255,255,255,.06)",
+            display:"none",
           }}>
             <div style={{ color:"rgba(255,255,255,.65)", fontSize:10, lineHeight:1.5 }}>
               🏥 Hospital do Bem
@@ -340,34 +346,61 @@ export default function AppShell({
               Unidade Oncológica · Patos-PB
             </div>
           </div>
-        </div>
-
-        {/* Perfil ativo */}
-        <div style={{ padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,.05)" }}>
           <button
+            type="button"
             onClick={onTrocarPerfil}
             style={{
               width:"100%",
-              background:"linear-gradient(90deg,#B8860B1A,#B8860B0D)",
-              border:"1px solid #B8860B44",
-              borderRadius:10,
-              padding:"8px 12px",
+              background:"rgba(255,255,255,.04)",
+              borderRadius:8,
+              padding:"8px 10px",
+              border:"1px solid rgba(255,255,255,.06)",
+              textAlign:"left",
               cursor:"pointer",
-              display:"flex",
-              alignItems:"center",
-              justifyContent:"space-between",
-              transition:"all .15s",
               fontFamily:"inherit",
             }}
-            onMouseEnter={e => e.currentTarget.style.background="linear-gradient(90deg,#B8860B2A,#B8860B18)"}
-            onMouseLeave={e => e.currentTarget.style.background="linear-gradient(90deg,#B8860B1A,#B8860B0D)"}
           >
-            <span style={{ color:"#D4A017", fontWeight:700, fontSize:12 }}>
-              {LABEL_PERFIL[perfil] || perfil}
-            </span>
-            <span style={{ color:"rgba(255,255,255,.3)", fontSize:9 }}>trocar ↓</span>
+            <div style={{ color:"rgba(255,255,255,.72)", fontSize:10, lineHeight:1.5, fontWeight:850 }}>
+              Página inicial
+            </div>
+            <div style={{ color:"rgba(255,255,255,.34)", fontSize:9, lineHeight:1.5 }}>
+              Recepção · Pacientes · Agenda
+            </div>
           </button>
         </div>
+
+        {/* Busca/atalho superior do perfil */}
+        {sidebarTop ? (
+          <div style={{ padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,.05)" }}>
+            {sidebarTop}
+          </div>
+        ) : (
+          <div style={{ padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,.05)" }}>
+            <button
+              onClick={onTrocarPerfil}
+              style={{
+                width:"100%",
+                background:"linear-gradient(90deg,#B8860B1A,#B8860B0D)",
+                border:"1px solid #B8860B44",
+                borderRadius:10,
+                padding:"8px 12px",
+                cursor:"pointer",
+                display:"flex",
+                alignItems:"center",
+                justifyContent:"space-between",
+                transition:"all .15s",
+                fontFamily:"inherit",
+              }}
+              onMouseEnter={e => e.currentTarget.style.background="linear-gradient(90deg,#B8860B2A,#B8860B18)"}
+              onMouseLeave={e => e.currentTarget.style.background="linear-gradient(90deg,#B8860B1A,#B8860B0D)"}
+            >
+              <span style={{ color:"#D4A017", fontWeight:700, fontSize:12 }}>
+                {LABEL_PERFIL[perfil] || perfil}
+              </span>
+              <span style={{ color:"rgba(255,255,255,.3)", fontSize:9 }}>trocar ↓</span>
+            </button>
+          </div>
+        )}
 
         {/* Navegação */}
         <nav style={{ flex:1, padding:"12px 8px", display:"flex", flexDirection:"column", gap:3 }}>
@@ -501,11 +534,9 @@ export default function AppShell({
           padding:"20px 24px",
           background:"#F5F7FA",
         }}>
-          <div style={{ maxWidth:1080, margin:"0 auto" }}>
-            <CarouselContent activeTab={activeTab}>
-              {children}
-            </CarouselContent>
-          </div>
+          <CarouselContent activeTab={activeTab}>
+            {children}
+          </CarouselContent>
         </main>
       </div>
     </div>
@@ -593,6 +624,9 @@ export function BtnV4({ children, onClick, variant = "primary", style, disabled 
 }
 
 export function SubTabs({ tabs, active, onChange }) {
+  // startTransition evita o erro React 18 "suspended while responding to
+  // synchronous input" quando a aba aciona um React.lazy pela primeira vez.
+  const [, startTransition] = useTransition();
   return (
     <div style={{
       display:"flex", gap:2,
@@ -604,7 +638,7 @@ export function SubTabs({ tabs, active, onChange }) {
       {tabs.map(tab => {
         const ativo = active === tab.id;
         return (
-          <button key={tab.id} onClick={() => onChange(tab.id)} style={{
+          <button key={tab.id} onClick={() => startTransition(() => onChange(tab.id))} style={{
             flex:1, padding:"7px 12px",
             borderRadius:8, border:"none",
             cursor:"pointer",

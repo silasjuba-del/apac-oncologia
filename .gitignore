@@ -6,6 +6,7 @@ dist/
 server/.env
 server/.env.example
 uploads/
+server/logs/
 *.db
 *.db-shm
 *.db-wal

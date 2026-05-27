@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from "react";
 import { N, G, T, VE, VM, AM } from "../../utils/constants";
 import { sc_, H2, H3, Fld, Btn, NOW, ResumoBullets } from "../../components/ui/primitives";
-import { _apiUrl } from "../../utils/api";
+import { _apiUrl, _backendHeaders } from "../../utils/api";
 import {
   criarDossieInicial, gerarDossieClaude,
 } from "../../utils/dossie";
@@ -36,7 +36,11 @@ export default function DriveDossieComp({pac,dossie,setDossie,addMsg}){
     if(!url.trim()){alert("Informe nome, CPF, ID ou link da pasta Drive.");return;}
     setBuscando(true);setErro("");setAchados(null);setSelecionados(new Set());
     try{
-      const r=await fetch(API_URL+"/api/drive/search?q="+encodeURIComponent(url.trim()));
+      const r=await fetch(API_URL+"/api/drive/search",{
+        method:"POST",
+        headers:_backendHeaders(),
+        body:JSON.stringify({q:url.trim()})
+      });
       const d=await r.json();
       if(!r.ok||!d.ok)throw new Error(d.message||"Falha ao buscar no Drive.");
       setAchados(d);
@@ -57,7 +61,7 @@ export default function DriveDossieComp({pac,dossie,setDossie,addMsg}){
       const arquivoIds=selecionados.size>0?Array.from(selecionados):null;
       const r=await fetch(API_URL+"/api/dossie/drive",{
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:_backendHeaders(),
         body:JSON.stringify({paciente:pac||{},recepcao:{drive_folder:consultaDrive},drive_folder:consultaDrive,texto,tipo,arquivoIds})
       });
       const data=await r.json();

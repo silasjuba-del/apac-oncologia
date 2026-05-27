@@ -1,4 +1,4 @@
-// server/routes/dossie.js
+﻿// server/routes/dossie.js
 // Upload direto de laudos → Claude → Dossiê
 // SEM dependência de Google Drive
 
@@ -35,6 +35,10 @@ router.post("/gerar", upload.array("laudos", 20), async (req, res) => {
   const pacienteId = Number(req.body.paciente_id);
   const pacienteJson = parseJsonSeguro(req.body.paciente_json, {});
   const recepcaoJson = parseJsonSeguro(req.body.recepcao_json, {});
+  const temIdentidadeMinima = Boolean(
+    pacienteJson?.nome || pacienteJson?.cpf || pacienteJson?.cns ||
+    recepcaoJson?.nome || recepcaoJson?.cpf || recepcaoJson?.cns
+  );
   if (!process.env.ANTHROPIC_API_KEY) {
     limparUploadsTemporarios(req.files);
     return res.status(503).json({
@@ -48,8 +52,19 @@ router.post("/gerar", upload.array("laudos", 20), async (req, res) => {
     const dados = pacienteId
       ? getPacienteCompleto(pacienteId)
       : { paciente: pacienteJson, recepcao: recepcaoJson };
-    if (pacienteId && !dados) return res.status(404).json({ message: "Paciente não encontrado." });
+    if (pacienteId && !dados) {
+      limparUploadsTemporarios(req.files);
+      return res.status(404).json({ message: "Paciente nao encontrado." });
+    }
 
+    if (!pacienteId && !temIdentidadeMinima) {
+      limparUploadsTemporarios(req.files);
+      return res.status(400).json({
+        ok: false,
+        code: "DOSSIE_PATIENT_CONTEXT_REQUIRED",
+        message: "Informe paciente_id ou dados identificadores do paciente para gerar uma previa de dossie.",
+      });
+    }
     if (!pacienteId) {
       const textosLaudos = await montarTextosLaudos(req);
       const resumo = await gerarDossie({
@@ -57,8 +72,9 @@ router.post("/gerar", upload.array("laudos", 20), async (req, res) => {
         recepcao: dados.recepcao || {},
         textosLaudos,
       });
-      return res.json({
+      return res.set("Cache-Control", "no-store").json({
         ok: true,
+        preview: true,
         dossieId: null,
         status: "concluido",
         text: resumo,
@@ -73,8 +89,9 @@ router.post("/gerar", upload.array("laudos", 20), async (req, res) => {
       VALUES (?, 'processando')
     `).run(pacienteId);
     const dossieId = info.lastInsertRowid;
+    db.prepare("UPDATE pacientes SET status='claude_processando' WHERE id=?").run(pacienteId);
 
-    res.json({ ok: true, dossieId, status: "processando" });
+    res.set("Cache-Control", "no-store").json({ ok: true, dossieId, pacienteId, status: "processando" });
 
     // Background — analisar laudos + gerar dossiê
     ;(async () => {
@@ -106,12 +123,14 @@ router.post("/gerar", upload.array("laudos", 20), async (req, res) => {
             status_analise='concluido'
           WHERE id=?
         `).run(resumo, cid10, estadiamento, subtipo, biomarcadores, dataBiopsia, dossieId);
+        db.prepare("UPDATE pacientes SET status='pronto_medico' WHERE id=?").run(pacienteId);
 
       } catch (e) {
         console.error("[dossie background]", e.message);
         db.prepare(
           "UPDATE dossies SET status_analise='erro', erro_analise=? WHERE id=?"
         ).run("Falha na análise. Verifique sua chave API e tente novamente.", dossieId);
+        db.prepare("UPDATE pacientes SET status='pendencia_administrativa' WHERE id=?").run(pacienteId);
         // Limpar arquivos temporários em caso de erro
         limparUploadsTemporarios(req.files);
       }
@@ -126,11 +145,15 @@ router.post("/gerar", upload.array("laudos", 20), async (req, res) => {
 // GET /api/dossie/status/:id
 router.get("/status/:id", (req, res) => {
   try {
+    const dossieId = Number(req.params.id);
+    const pacienteId = Number(req.query.paciente_id);
+    if (!Number.isFinite(dossieId) || dossieId <= 0) return res.status(400).json({ message: "dossie_id invalido." });
+    if (!Number.isFinite(pacienteId) || pacienteId <= 0) return res.status(400).json({ message: "paciente_id obrigatorio para consultar status do dossie." });
     const d = db.prepare(
-      "SELECT id, status_analise, erro_analise, resumo_claude, cid10_extraido, estadiamento_extraido, subtipo_extraido, biomarcadores_extraidos FROM dossies WHERE id=?"
-    ).get(Number(req.params.id));
+      "SELECT id, paciente_id, status_analise, erro_analise, resumo_claude, cid10_extraido, estadiamento_extraido, subtipo_extraido, biomarcadores_extraidos FROM dossies WHERE id=? AND paciente_id=?"
+    ).get(dossieId, pacienteId);
     if (!d) return res.status(404).json({ message: "Dossiê não encontrado." });
-    res.json(d);
+    res.set("Cache-Control", "no-store").json(d);
   } catch (e) {
     res.status(500).json({ message: "Erro interno no servidor." });
   }
@@ -139,10 +162,13 @@ router.get("/status/:id", (req, res) => {
 // GET /api/dossie/ultimo/:pacienteId
 router.get("/ultimo/:pacienteId", (req, res) => {
   try {
+    const pacienteId = Number(req.params.pacienteId);
+    if (!Number.isFinite(pacienteId) || pacienteId <= 0) return res.status(400).json({ message: "paciente_id invalido." });
+    if (!getPacienteCompleto(pacienteId)) return res.status(404).json({ message: "Paciente nao encontrado." });
     const d = db.prepare(
       "SELECT * FROM dossies WHERE paciente_id=? ORDER BY created_at DESC LIMIT 1"
-    ).get(Number(req.params.pacienteId));
-    res.json(d || null);
+    ).get(pacienteId);
+    res.set("Cache-Control", "no-store").json(d || null);
   } catch (e) {
     res.status(500).json({ message: "Erro interno no servidor." });
   }
@@ -162,7 +188,11 @@ router.post("/ler-local", async (req, res) => {
       });
     }
 
-    const { paciente_id, caminho, tipo, data, paciente = {}, recepcao = {} } = req.body || {};
+    const { paciente_id, caminho, tipo, data } = req.body || {};
+    const pacienteId = Number(paciente_id);
+    if (!Number.isFinite(pacienteId) || pacienteId <= 0) {
+      return res.status(400).json({ ok: false, message: "Selecione um paciente salvo antes de ler arquivo local." });
+    }
     if (!String(caminho || "").trim()) {
       return res.status(400).json({ ok: false, message: "Caminho do arquivo é obrigatório." });
     }
@@ -182,12 +212,11 @@ router.post("/ler-local", async (req, res) => {
       return res.status(403).json({
         ok: false,
         message: "Por segurança, só leio arquivos dentro de Desktop/OneDrive, Downloads ou Documentos. Ajuste LOCAL_DOC_ROOTS no server/.env se precisar.",
-        caminho: caminhoNormalizado,
       });
     }
 
     if (!fs.existsSync(caminhoNormalizado)) {
-      return res.status(404).json({ ok: false, message: "Arquivo não encontrado: " + caminhoNormalizado });
+      return res.status(404).json({ ok: false, message: "Arquivo nao encontrado dentro das pastas permitidas." });
     }
 
     const st = fs.statSync(caminhoNormalizado);
@@ -199,9 +228,9 @@ router.post("/ler-local", async (req, res) => {
     const mimeType = MIMES[ext];
     if (!mimeType) return res.status(400).json({ ok: false, message: "Formato não suportado. Use PDF, JPG, PNG ou WEBP." });
 
-    const pacienteId = Number(paciente_id);
-    const dadosDb = pacienteId ? getPacienteCompleto(pacienteId) : null;
-    const dados = dadosDb || { paciente: paciente || {}, recepcao: recepcao || {} };
+    const dadosDb = getPacienteCompleto(pacienteId);
+    if (!dadosDb) return res.status(404).json({ ok: false, message: "Paciente nao encontrado." });
+    const dados = dadosDb;
     const base64Data = fs.readFileSync(caminhoNormalizado).toString("base64");
     const tipoEx = tipo || detectarTipo(path.basename(caminhoNormalizado));
     const dataEx = data || "";
@@ -234,20 +263,21 @@ router.post("/ler-local", async (req, res) => {
           status_analise='concluido'
         WHERE id=?
       `).run(resumo, cid10, estadiamento, subtipo, biomarcadores, dataBiopsia, dossieId);
+      db.prepare("UPDATE pacientes SET status='pronto_medico' WHERE id=?").run(pacienteId);
     }
 
-    res.json({
+    res.set("Cache-Control", "no-store").json({
       ok: true,
       status: "concluido",
       dossieId,
       text: resumo,
       resumo,
       resumoLaudo,
-      arquivo: { nome: path.basename(caminhoNormalizado), caminho: caminhoNormalizado, mimeType, tamanho: st.size },
+      arquivo: { nome: path.basename(caminhoNormalizado), mimeType, tamanho: st.size },
     });
   } catch (e) {
     console.error("[/dossie/ler-local]", e.message);
-    res.status(500).json({ ok: false, message: e.message || "Erro interno." });
+    res.status(500).json({ ok: false, message: "Erro interno ao ler arquivo local." });
   }
 });
 
@@ -297,11 +327,11 @@ async function montarTextosLaudos(req) {
       });
       textosLaudos.push({ tipo, data, conteudo: resumo });
     } catch (ef) {
-      console.warn("[laudo]", arq.originalname, ef.message);
+      console.warn("[laudo] Falha ao analisar arquivo enviado:", ef.message);
       textosLaudos.push({
         tipo,
         data,
-        conteudo: `Não foi possível analisar este arquivo automaticamente: ${arq.originalname}`,
+        conteudo: "Não foi possível analisar este arquivo automaticamente.",
       });
     } finally {
       if (fs.existsSync(arq.path)) fs.unlinkSync(arq.path);

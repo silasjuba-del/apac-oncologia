@@ -149,11 +149,12 @@ describe('resolverCampoAPAC — cod_proc (SIGTAP)', () => {
     expect(r.fonte).toBe('pac.cod_proc');
   });
 
-  it('ausente mas diag de mama → inferido via getSIGTAPFromDiag', () => {
+  it('ausente mas diag de mama → inferido via resolverSIGTAP (F4.5: fonte diag:texto)', () => {
     const r = resolverCampoAPAC('cod_proc', { diag: 'Adenocarcinoma de mama' });
     expect(r.status).toBe('inferido');
     expect(r.valor).toBe('03.04.02.002-3');
-    expect(r.fonte).toBe('ia:diagSIGTAP');
+    // F4.5: migrado de getSIGTAPFromDiag (fonte 'ia:diagSIGTAP') para resolverSIGTAP (fonte 'diag:texto')
+    expect(r.fonte).toBe('diag:texto');
   });
 
   it('ausente e diag sem SIGTAP mapeado → ausente', () => {
