@@ -120,37 +120,38 @@ export function calcBSASafe(pesoKg, alturaCm) {
  * @throws {Error} se parâmetros inválidos
  */
 export function calcCrCl(idade, pesoKg, alturaCm, creatinina, sexo) {
-  if (idade < 18 || idade > 110)
+  const idadeNum = Number(idade);
+  const pesoNum = Number(pesoKg);
+  const alturaNum = Number(alturaCm);
+  const creatNum = Number(creatinina);
+
+  if (!Number.isFinite(idadeNum) || idadeNum < 18 || idadeNum > 110)
     throw new Error(`calcCrCl: idade fora do range (${idade} anos)`);
-  if (creatinina <= 0 || creatinina > 20)
-    throw new Error(`calcCrCl: creatinina inválida (${creatinina} mg/dL)`);
+  if (!Number.isFinite(pesoNum) || pesoNum <= 0 || pesoNum > 300)
+    throw new Error(`calcCrCl: peso invalido (${pesoKg} kg)`);
+  if (!Number.isFinite(alturaNum) || alturaNum < 120 || alturaNum > 230)
+    throw new Error(`calcCrCl: altura invalida (${alturaCm} cm)`);
+  if (!Number.isFinite(creatNum) || creatNum <= 0 || creatNum > 20)
+    throw new Error(`calcCrCl: creatinina invalida (${creatinina} mg/dL)`);
   if (sexo !== 'M' && sexo !== 'F')
     throw new Error(`calcCrCl: sexo deve ser 'M' ou 'F'`);
 
-  // Peso ideal (Devine)
-  // BUG-15 fix: Math.max garante alturaExcesso ≥ 0 para pacientes com altura < 152.4 cm.
-  // Sem isso, pacientes obesos de baixa estatura teriam pesoIdeal ≤ 0, a condição
-  // (imc > 30 && pesoIdeal > 0) seria falsa e o ClCr seria calculado com peso real
-  // (superestimando até 2× em casos extremos → superdosagem de carboplatina/cisplatina).
-  const alturaM = alturaCm / 100;
-  const alturaExcesso = Math.max(alturaCm - 152.4, 0);
-  const pesoIdeal =
-    sexo === 'M'
-      ? 50 + 2.3 * (alturaExcesso / 2.54)
-      : 45.5 + 2.3 * (alturaExcesso / 2.54);
+  const alturaM = alturaNum / 100;
+  const alturaExcesso = Math.max(alturaNum - 152.4, 0);
+  const pesoIdeal = sexo === 'M'
+    ? 50 + 2.3 * (alturaExcesso / 2.54)
+    : 45.5 + 2.3 * (alturaExcesso / 2.54);
 
-  // IMC para decidir qual peso usar
-  const imc = pesoKg / (alturaM * alturaM);
-  // pesoIdeal sempre > 0 após fix (mínimo: 50 M / 45.5 F para altura ≤ 152.4 cm)
-  const pesoUsado = imc > 30 ? pesoIdeal : pesoKg;
+  const imc = pesoNum / (alturaM * alturaM);
+  const pesoAjustado = pesoIdeal + 0.4 * Math.max(0, pesoNum - pesoIdeal);
+  const pesoUsado = imc >= 30 ? Math.min(pesoNum, pesoAjustado) : pesoNum;
 
-  const base = ((140 - idade) * pesoUsado) / (72 * creatinina);
+  const base = ((140 - idadeNum) * pesoUsado) / (72 * creatNum);
   const crcl = sexo === 'F' ? base * 0.85 : base;
 
-  return parseFloat(Math.max(crcl, 1).toFixed(2)); // mínimo clínico: 1 mL/min
+  return parseFloat(Math.max(crcl, 1).toFixed(2));
 }
-
-/** Versão safe de calcCrCl */
+/** Versao safe de calcCrCl */
 export function calcCrClSafe(idade, pesoKg, alturaCm, creatinina, sexo) {
   try {
     return { crcl: calcCrCl(idade, pesoKg, alturaCm, creatinina, sexo), erro: null };
@@ -230,14 +231,19 @@ export function calcDoseFarmaco(farmaco, params) {
     return { doseCalculada: null, unidadeFinal: 'mg', erro: 'doseValor ausente ou inválido', avisos };
   }
 
-  // CLINIC-04 fix: co-medicações obrigatórias (corticoides, anticoagulantes, etc.)
-  // não devem ter redução percentual de quimioterapia aplicada.
-  // O campo reducaoNaoAplicavel sinaliza isso no catálogo.
-  const reducaoAtiva = farmaco.reducaoNaoAplicavel ? 0 : reducaoPct;
-  if (farmaco.reducaoNaoAplicavel && reducaoPct > 0) {
-    avisos.push(`Redução de ${reducaoPct}% NÃO aplicada — ${farmaco.farmaco || farmaco.nome} é co-medicação de dose fixa obrigatória`);
+  const bloqueiaReducaoPercentual =
+    farmaco.reducaoNaoAplicavel === true ||
+    farmaco.reducaoPercentualPermitida === false ||
+    farmaco.aplicarReducaoDose === false ||
+    farmaco.classe === 'co_medicacao_obrigatoria';
+  const reducaoEfetivaPct = bloqueiaReducaoPercentual ? 0 : reducaoPct;
+  const fatorReducao = 1 - reducaoEfetivaPct / 100;
+
+  if (bloqueiaReducaoPercentual && reducaoPct > 0) {
+    avisos.push(
+      `${farmaco.farmaco || farmaco.nome || 'Farmaco'}: reducao global de dose nao aplicada por ser co-medicacao/medicacao fixa obrigatoria.`
+    );
   }
-  const fatorReducao = 1 - reducaoAtiva / 100;
 
   try {
     switch (doseUnidade) {
@@ -438,6 +444,10 @@ export function calcProtocoloCompleto(protocolo, paciente) {
     return { linhas, avisosCriticos, erros };
   }
 
+  const temCisplatina = farmacos.some(f => normalizarNomeFarmaco(f.farmaco || f.nome).includes('cisplatina'));
+  if (temCisplatina && (crcl === null || crcl === undefined || !Number.isFinite(Number(crcl)))) {
+    erros.push('Cisplatina: ClCr/funcao renal obrigatoria antes do calculo de dose. Informar creatinina, idade e sexo ou ClCr validado.');
+  }
   for (const farmaco of farmacos) {
     const resultado = calcDoseFarmaco(farmaco, {
       bsa,
@@ -449,7 +459,7 @@ export function calcProtocoloCompleto(protocolo, paciente) {
     // Verificar dose cumulativa
     let cumCheck = { nivel: 'ok', mensagem: '' };
     // BUG-17 fix: resolver aliases antes de buscar no mapa (ex: 'doxorubicina' → 'doxorrubicina')
-    const nomeRaw = (farmaco.farmaco || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const nomeRaw = normalizarNomeFarmaco(farmaco.farmaco || farmaco.nome);
     const nomeNorm = ALIAS_FARMACO_CUMULATIVO[nomeRaw] || nomeRaw;
     const previo = (paciente.dosesCumulativas || {})[nomeNorm] || 0;
     if (resultado.doseCalculada !== null && resultado.doseCalculada !== undefined) {

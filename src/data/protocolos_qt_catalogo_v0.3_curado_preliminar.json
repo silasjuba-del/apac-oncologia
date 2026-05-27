@@ -688,8 +688,10 @@
           "tempoMin": null,
           "calculo": "fixo",
           "dispensacaoFarmacia": true,
-          "observacao": "Parte obrigatoria do protocolo docetaxel prostata; dispensar junto quando indicado e validado pelo medico. reducaoNaoAplicavel:true — dose fixa independente de reducao de QT.",
-          "reducaoNaoAplicavel": true
+          "observacao": "Co-medicacao obrigatoria de dose fixa; nao aplicar reducao percentual de quimioterapia.",
+          "reducaoNaoAplicavel": true,
+          "reducaoPercentualPermitida": false,
+          "aplicarReducaoDose": false
         }
       ],
       "coMedicacoes": [],
@@ -704,7 +706,8 @@
       "alertas": [
         "Distinguir sensivel a castracao versus resistente a castracao.",
         "Confirmar manutencao de bloqueio androgenico quando indicado.",
-        "Prednisona movida para farmacos como co_medicacao_obrigatoria para aparecer na dispensacao."
+        "Prednisona movida para farmacos como co_medicacao_obrigatoria para aparecer na dispensacao.",
+        "CLINIC-04: reducao percentual global nao se aplica a prednisona de dose fixa."
       ]
     },
     {
@@ -796,7 +799,8 @@
         "Cisplatina exige ClCr adequado, hidratacao e avaliacao de ototoxicidade/neuropatia.",
         "Nao substituir por carboplatina automaticamente sem decisao medica.",
         "BLOQUEIO CID: C22/C23/C24 nao devem usar este protocolo; usar variante biliar ABC-02 bloqueada para auditoria.",
-        "Escopo revisado: protocolo restrito a C34/C67/outros solidos sob revisao; vias biliares bloqueadas em ABC-02 separado."
+        "Escopo revisado: protocolo restrito a C34/C67/outros solidos sob revisao; vias biliares bloqueadas em ABC-02 separado.",
+        "CLINIC-01: C56/ovario removidos do CisGema compartilhado; bloquear C56 neste protocolo."
       ],
       "cid10Bloqueados": [
         {
@@ -810,18 +814,21 @@
         {
           "cid": "C24",
           "motivo": "Vias biliares exigem protocolo especifico ABC-02: cisplatina 25 mg/m2 D1+D8 + gemcitabina 1000 mg/m2 D1+D8."
+        },
+        {
+          "cid": "C56",
+          "motivo": "Ovario nao deve usar este CisGema compartilhado. Usar protocolo especifico de ovario ou revisar indicacao formal."
         }
       ],
       "tumorPrimario": [
         "pulmonar",
-        "vesical",
-        "outros_solidos"
+        "vesical"
       ],
       "cids": [
         "C34",
         "C67"
       ],
-      "observacaoEscopo": "Escopo explicito para evitar uso como protocolo universal. C22/C23/C24 foram removidos e devem usar a variante biliar ABC-02 bloqueada. C56/ovario removido em 2026-05-27 — protocolo CisGema 70mg/m2 nao e padrao para ovario (usar CarboTaxol)."
+      "observacaoEscopo": "Escopo explicito para evitar uso como protocolo universal. C22/C23/C24 foram removidos e devem usar a variante biliar ABC-02 bloqueada."
     },
     {
       "id": "qt-curado-v03-cisplatina-gemcitabina-biliar-abc02",
@@ -947,7 +954,12 @@
           "volumeMl": null,
           "tempoMin": null,
           "calculo": "Calvert",
-          "observacao": ""
+          "observacao": "AUC placeholder bloqueado. Medico deve confirmar AUC e dias de etoposideo antes de qualquer liberacao futura.",
+          "dosePadrao": 6,
+          "doseMin": 4,
+          "doseMax": 6,
+          "aucEditavelPeloMedico": true,
+          "requerConfirmacaoAUC": true
         },
         {
           "nome": "Etoposideo",
@@ -973,7 +985,8 @@
         "funcao_hepatica"
       ],
       "alertas": [
-        "Nao liberar ate confirmar dose/dias de etoposideo."
+        "Nao liberar ate confirmar dose/dias de etoposideo.",
+        "Carboplatina: AUC deve ser confirmada/editada pelo medico antes do calculo de Calvert."
       ]
     },
     {
@@ -1178,7 +1191,7 @@
     "teste unitario de calculo de dose criado",
     "teste de bloqueio APAC/prescricao criado"
   ],
-  "lastSafetyAuditAt": "2026-05-27T20:43:13.203Z",
+  "lastSafetyAuditAt": "2026-05-27T00:00:00-03:00",
   "auditoriaSeguranca": {
     "vereditoOriginal": "rejeitar_com_bloqueios_criticos",
     "prescricaoPermitidaGlobal": false,
@@ -1192,7 +1205,10 @@
       "Docetaxel prostata: prednisona movida para farmacos como co_medicacao_obrigatoria com dispensacaoFarmacia=true.",
       "Temozolomida: placeholder unico marcado como substituido por dois placeholders bloqueados (concomitante RT e adjuvante Stupp).",
       "CisGema original recebeu tumorPrimario/cids explicitos para nao parecer protocolo universal.",
-      "TMZ placeholder recebeu observacao/substituido para explicar divisao em duas variantes bloqueadas."
+      "TMZ placeholder recebeu observacao/substituido para explicar divisao em duas variantes bloqueadas.",
+      "CLINIC-01: C56/ovario removidos do CisGema original e adicionados a cid10Bloqueados.",
+      "CLINIC-04: prednisona do docetaxel prostata marcada como dose fixa sem reducao percentual.",
+      "Carbo-etoposideo bloqueado: carboplatina recebeu doseMin/doseMax e AUC editavel para saneamento de schema."
     ],
     "observacao": "Catalogo continua nao aprovado para prescricao. A integracao futura deve filtrar prescricaoPermitida=true e status=aprovado."
   }

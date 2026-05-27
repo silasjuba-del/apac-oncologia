@@ -231,6 +231,30 @@ export function validarRequisitosFarmacos(protocolo, paciente = {}) {
 
   // Cisplatina → hidratação e auditometria
   if (farmacosList.includes('cisplatina')) {
+    const crclBruto = paciente.crclMlMin ?? paciente.clcr ?? paciente.clearanceCreatinina ?? paciente.creatininaClearance;
+    const crclNum = Number(crclBruto);
+    const temClcr = crclBruto !== null && crclBruto !== undefined && crclBruto !== '' && Number.isFinite(crclNum) && crclNum > 0;
+    const podeCalcularClcr = paciente.creatinina && paciente.idade && paciente.sexo && paciente.pesoKg && paciente.alturaCm;
+
+    if (!temClcr && !podeCalcularClcr) {
+      alertas.push({
+        nivel: NIVEL.CRITICO,
+        codigo: 'CISPLATINA_SEM_FUNCAO_RENAL',
+        mensagem: 'Cisplatina: funcao renal/ClCr obrigatoria antes de prescrever. Informar ClCr validado ou creatinina, idade, sexo, peso e altura para calculo.',
+      });
+    } else if (temClcr && crclNum < 50) {
+      alertas.push({
+        nivel: NIVEL.CRITICO,
+        codigo: 'CISPLATINA_CLCR_BAIXO',
+        mensagem: `Cisplatina: ClCr ${crclNum} mL/min (<50). Bloquear prescricao ate revisao medica/farmacia e alternativa de conduta.`,
+      });
+    } else if (temClcr && crclNum < 60) {
+      alertas.push({
+        nivel: NIVEL.GRAVE,
+        codigo: 'CISPLATINA_CLCR_LIMITE',
+        mensagem: `Cisplatina: ClCr ${crclNum} mL/min (50-59). Exige justificativa medica, hidratacao e monitorizacao renal.`,
+      });
+    }
     alertas.push({
       nivel: NIVEL.AVISO,
       codigo: 'CISPLATINA_HIDRATACAO',

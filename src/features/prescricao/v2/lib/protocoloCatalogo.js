@@ -75,7 +75,7 @@ function normalizarProtocoloV3(p) {
 
     // BUG-01 fix: array vazio [] é falsy → usaria cid10Sugeridos não curados como fallback.
     // cids = [] = "nenhum CID operacional definido", não é fallback para cid10Sugeridos.
-    cids: Array.isArray(p.cids) && p.cids.length > 0 ? p.cids : (p.cid10Sugeridos || []),
+    cids: Array.isArray(p.cids) ? p.cids : (p.cid10Sugeridos || []),
 
     // Versão do catálogo de origem
     versaoCatalogo: p.versaoCatalogo || 'v0.3',
