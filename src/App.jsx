@@ -54,6 +54,7 @@ const FilaDiaMedico        = React.lazy(()=>import('./features/medico/FilaDiaMed
 const EstatisticasComp     = React.lazy(()=>import('./features/medico/EstatisticasComp'));
 const PrescricaoQT         = React.lazy(()=>import('./features/prescricao/PrescricaoQT'));
 const PrescricaoQTv2       = React.lazy(()=>import('./features/prescricao/v2/PrescricaoQTv2'));
+const NovoProtocoloBuilder = React.lazy(()=>import('./features/prescricao/v2/NovoProtocoloBuilder'));
 const ReceitasComp         = React.lazy(()=>import('./features/recepcao/ReceitasComp'));
 const SalaoMedico          = React.lazy(()=>import('./features/enfermagem/SalaoMedico'));
 const SeletorEquipe        = React.lazy(()=>import('./components/shared/SeletorEquipe'));
@@ -1614,9 +1615,10 @@ export default function App(){
       );
       case "prescricao": return(
         <div>
-          <SubTabsV4 tabs={[{id:"motor45",ico:"🧮",label:"Motor v4.5"},{id:"prescricao_atual",ico:"💉",label:"Prescrição atual"},{id:"qt_v2",ico:"🔬",label:"Prescrição v2 ⚠️"}]} active={prescricaoTab2} onChange={setPrescricaoTab2}/>
+          <SubTabsV4 tabs={[{id:"motor45",ico:"🧮",label:"Motor v4.5"},{id:"prescricao_atual",ico:"💉",label:"Prescrição atual"},{id:"qt_v2",ico:"🔬",label:"Prescrição v2 ⚠️"},{id:"novo_protocolo",ico:"➕",label:"Novo Protocolo"}]} active={prescricaoTab2} onChange={setPrescricaoTab2}/>
           {prescricaoTab2==="motor45"&&<ProtocolosQTExplorer pac={pac} up={up} addMsg={addMsg} historicoQT={historicoQTPaciente} setHistoricoQT={setHistoricoQTPaciente}/>}
           {prescricaoTab2==="prescricao_atual"&&<PrescricaoQT pac={pac} up={up} addMsg={addMsg} ciclosHistorico={historicoQTPaciente} setCiclosHistorico={setHistoricoQTPaciente} onSalvoCiclos={(proto,ciclos)=>{setDossieOncologico(d=>{const base=d||criarDossieInicial(pac);const doc={id:Date.now(),tipo:"Prescrição QT",nome:`${proto.nome} — ${ciclos.length} ciclos liberados`,resumo:`Protocolo: ${proto.nome}\nCiclos: ${ciclos.length}\nInício: ${ciclos[0]?.data||"—"}\nFármacos: ${proto.drugs?.map(dr=>dr.n).join(", ")||"—"}`,origem:"prescricao_qt",criadoEm:NOW()};const novo={...base,paciente:{...(base.paciente||{}),...pac},documentos:[doc,...(base.documentos||[])],status:"pronto_medico",updatedAt:NOW()};novo.evolucao={...(novo.evolucao||{}),rascunho:gerarTextoEvolucao(novo)};novo.apac=validarAPAC(novo);return novo;});}}/>}
+          {prescricaoTab2==="novo_protocolo"&&<React.Suspense fallback={<div style={{padding:24,textAlign:"center",color:"#64748B"}}>Carregando…</div>}><NovoProtocoloBuilder/></React.Suspense>}
           {prescricaoTab2==="qt_v2"&&<React.Suspense fallback={<div style={{padding:24,textAlign:"center",color:"#64748B"}}>Carregando módulo v2…</div>}><PrescricaoQTv2
             catalogoJson={catalogoQTV03}
             pacienteInicial={{
