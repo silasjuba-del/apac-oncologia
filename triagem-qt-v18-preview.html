@@ -1,0 +1,943 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview Triagem QT v18</title>
+  <style>
+    :root {
+      --navy: #14233f;
+      --ink: #1f2937;
+      --muted: #64748b;
+      --line: #cbd5e1;
+      --bg: #eef2f7;
+      --panel: #ffffff;
+      --teal: #0f766e;
+      --green: #15803d;
+      --amber: #b45309;
+      --red: #b91c1c;
+      --blue: #1d4ed8;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+    }
+
+    aside {
+      background: var(--navy);
+      color: #fff;
+      padding: 22px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .brand {
+      display: grid;
+      gap: 6px;
+    }
+
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: #d6b44c;
+      color: var(--navy);
+      font-weight: 900;
+      font-size: 22px;
+    }
+
+    .brand h1 {
+      margin: 6px 0 0;
+      font-size: 22px;
+      line-height: 1.1;
+    }
+
+    .brand p {
+      margin: 0;
+      color: rgba(255,255,255,.68);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .safe-note {
+      border: 1px solid rgba(255,255,255,.22);
+      background: rgba(255,255,255,.08);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .side-section {
+      display: grid;
+      gap: 8px;
+    }
+
+    .side-section h2 {
+      margin: 0;
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #d6b44c;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 9px;
+      align-items: center;
+      color: rgba(255,255,255,.74);
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .step span:first-child {
+      height: 28px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,.12);
+      color: #fff;
+      font-weight: 900;
+      font-size: 12px;
+    }
+
+    main {
+      padding: 22px;
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .topbar h2 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .topbar p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      padding: 9px 12px;
+      background: #e2e8f0;
+      color: var(--navy);
+    }
+
+    button.primary { background: var(--navy); color: #fff; }
+    button.success { background: var(--green); color: #fff; }
+    button.warn { background: var(--amber); color: #fff; }
+    button.danger { background: var(--red); color: #fff; }
+    button.ghost { background: #fff; border: 1px solid var(--line); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(340px, .85fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .section-head {
+      padding: 12px 14px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #f8fafc;
+    }
+
+    .section-head h3 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 14px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .section-head small {
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 11px;
+    }
+
+    .section-body { padding: 14px; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 900;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--navy);
+      background: #fff;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 88px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(15,118,110,.12);
+    }
+
+    .span2 { grid-column: span 2; }
+    .span4 { grid-column: span 4; }
+
+    .seg {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .seg button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--navy);
+      padding: 7px 9px;
+      font-size: 12px;
+    }
+
+    .seg button.on.normal { background: #dcfce7; color: var(--green); border-color: #86efac; }
+    .seg button.on.warn { background: #fef3c7; color: var(--amber); border-color: #fcd34d; }
+    .seg button.on.danger { background: #fee2e2; color: var(--red); border-color: #fca5a5; }
+    .seg button.on.info { background: #dbeafe; color: var(--blue); border-color: #93c5fd; }
+
+    .lab-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .lab-item {
+      border: 1px solid #e2e8f0;
+      border-radius: 9px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .lab-title {
+      color: var(--navy);
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .alarm-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .alarm {
+      text-align: left;
+      border: 1px solid #fecaca;
+      background: #fff;
+      color: #7f1d1d;
+      padding: 10px;
+      min-height: 58px;
+      display: grid;
+      gap: 3px;
+    }
+
+    .alarm.on {
+      background: #fee2e2;
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .alarm strong { font-size: 12px; }
+    .alarm small { font-size: 11px; font-weight: 600; color: inherit; opacity: .78; }
+
+    .status-panel {
+      position: sticky;
+      top: 16px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .semaforo {
+      border-radius: 12px;
+      padding: 16px;
+      color: #fff;
+      display: grid;
+      gap: 9px;
+    }
+
+    .semaforo.green { background: linear-gradient(135deg, #166534, #15803d); }
+    .semaforo.yellow { background: linear-gradient(135deg, #92400e, #b45309); }
+    .semaforo.red { background: linear-gradient(135deg, #991b1b, #b91c1c); }
+
+    .semaforo .label {
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+      opacity: .86;
+    }
+
+    .semaforo .title {
+      font-size: 26px;
+      font-weight: 950;
+      line-height: 1.05;
+    }
+
+    .semaforo ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .mini {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .metric {
+      border: 1px solid #e2e8f0;
+      border-radius: 9px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    .metric small {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .metric strong {
+      display: block;
+      color: var(--navy);
+      font-size: 18px;
+      margin-top: 4px;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.65;
+      color: #263244;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 9px;
+      padding: 12px;
+      max-height: 340px;
+      overflow: auto;
+    }
+
+    .payload {
+      color: #0f172a;
+      max-height: 230px;
+    }
+
+    .notice {
+      border-left: 4px solid var(--teal);
+      background: #ecfeff;
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #164e63;
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    @media (max-width: 1050px) {
+      .app { grid-template-columns: 1fr; }
+      aside { position: static; }
+      .grid { grid-template-columns: 1fr; }
+      .status-panel { position: static; }
+    }
+
+    @media (max-width: 720px) {
+      main { padding: 12px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .form-grid, .lab-grid, .alarm-grid, .mini { grid-template-columns: 1fr; }
+      .span2, .span4 { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <div class="brand-mark">QT</div>
+        <h1>Triagem QT v18</h1>
+        <p>Preview isolado para validar fluxo de enfermagem antes da implementação no APACApp.</p>
+      </div>
+
+      <div class="safe-note">
+        Este preview não salva em prontuário, não altera paciente ativo e não conversa com o backend. Serve apenas para aprovar layout, campos e lógica de semáforo.
+      </div>
+
+      <div class="side-section">
+        <h2>Fluxo proposto</h2>
+        <div class="step"><span>1</span><div>Coleta objetiva de sinais, ECOG, laboratório e toxicidade.</div></div>
+        <div class="step"><span>2</span><div>Semáforo automático para liberar, revisar ou segurar QT.</div></div>
+        <div class="step"><span>3</span><div>Resumo estruturado para médico e farmácia, com payload rastreável.</div></div>
+      </div>
+
+      <div class="side-section">
+        <h2>Adaptações v18</h2>
+        <div class="step"><span>A</span><div>Saída estruturada, não só texto.</div></div>
+        <div class="step"><span>B</span><div>Condutas como sugestão e validação médica obrigatória.</div></div>
+        <div class="step"><span>C</span><div>Pronto para integrar com patientId e encounterId depois do core Claude.</div></div>
+      </div>
+    </aside>
+
+    <main>
+      <div class="topbar">
+        <div>
+          <h2>Pré-QT rápido para enfermagem</h2>
+          <p>Objetivo: entregar ao médico uma síntese segura em menos de 2 minutos.</p>
+        </div>
+        <div class="actions">
+          <button class="ghost" id="sampleBtn">Paciente teste</button>
+          <button class="primary" id="summaryBtn">Gerar resumo</button>
+          <button class="ghost" id="clearBtn">Limpar</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="stack">
+          <section>
+            <div class="section-head">
+              <h3>1. Paciente e ciclo</h3>
+              <small>sem gravação neste preview</small>
+            </div>
+            <div class="section-body">
+              <div class="form-grid">
+                <label class="span2">Nome
+                  <input id="nome" placeholder="Nome do paciente" />
+                </label>
+                <label>Idade
+                  <input id="idade" type="number" min="0" max="130" placeholder="65" />
+                </label>
+                <label>Ciclo
+                  <input id="ciclo" type="number" min="1" max="80" placeholder="3" />
+                </label>
+                <label class="span2">Protocolo
+                  <select id="protocolo">
+                    <option value="">Selecionar...</option>
+                    <option>AC</option>
+                    <option>FOLFOX</option>
+                    <option>XELOX</option>
+                    <option>FOLFIRI</option>
+                    <option>CarboTaxol</option>
+                    <option>Cisplatina + Gencitabina</option>
+                    <option>Capecitabina</option>
+                    <option>Docetaxel</option>
+                    <option>Outro</option>
+                  </select>
+                </label>
+                <label>Peso kg
+                  <input id="peso" type="number" min="20" max="250" step="0.1" placeholder="68" />
+                </label>
+                <label>Altura cm
+                  <input id="altura" type="number" min="100" max="230" step="1" placeholder="165" />
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>2. Sinais vitais e ECOG</h3>
+              <small>bloqueios objetivos</small>
+            </div>
+            <div class="section-body">
+              <div class="form-grid">
+                <label>PA sistólica
+                  <input id="pas" type="number" min="60" max="300" placeholder="120" />
+                </label>
+                <label>PA diastólica
+                  <input id="pad" type="number" min="30" max="200" placeholder="80" />
+                </label>
+                <label>SpO2 %
+                  <input id="spo2" type="number" min="50" max="100" placeholder="98" />
+                </label>
+                <label>Temperatura
+                  <input id="temp" type="number" min="34" max="43" step="0.1" placeholder="36.7" />
+                </label>
+                <label class="span4">ECOG
+                  <div class="seg" data-group="ecog">
+                    <button data-value="0" class="info">0</button>
+                    <button data-value="1" class="info">1</button>
+                    <button data-value="2" class="warn">2</button>
+                    <button data-value="3" class="danger">3</button>
+                    <button data-value="4" class="danger">4</button>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>3. Laboratório essencial</h3>
+              <small>faixas rápidas para decisão</small>
+            </div>
+            <div class="section-body">
+              <div class="form-grid" style="margin-bottom:12px">
+                <label class="span2">Data do laboratório
+                  <input id="labDate" type="date" />
+                </label>
+              </div>
+              <div class="lab-grid" id="labGrid"></div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>4. Toxicidades e sinais de alarme</h3>
+              <small>clique rápido</small>
+            </div>
+            <div class="section-body stack">
+              <div>
+                <div class="notice">G0/G1 tende a liberar. G2 pede revisão conforme contexto. G3/G4 ou alarme crítico bloqueia até avaliação médica.</div>
+              </div>
+              <div id="toxGrid" class="lab-grid"></div>
+              <div class="alarm-grid" id="alarmGrid"></div>
+              <label>Observações da enfermagem
+                <textarea id="obs" placeholder="Ex.: paciente relata piora de fadiga há 3 dias, sem febre, hidratando bem..."></textarea>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <div class="status-panel">
+          <div class="semaforo green" id="semaforo">
+            <div class="label">Status pré-QT</div>
+            <div class="title" id="statusTitle">Apto para QT</div>
+            <ul id="statusReasons"><li>Sem bloqueios preenchidos até o momento.</li></ul>
+          </div>
+
+          <div class="mini">
+            <div class="metric"><small>SC</small><strong id="scValue">--</strong></div>
+            <div class="metric"><small>Risco</small><strong id="riskValue">Baixo</strong></div>
+            <div class="metric"><small>Labs</small><strong id="labAge">--</strong></div>
+          </div>
+
+          <section>
+            <div class="section-head">
+              <h3>Resumo para médico</h3>
+              <small>preview</small>
+            </div>
+            <div class="section-body">
+              <pre id="summaryText">Preencha dados ou clique em "Paciente teste".</pre>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Payload estruturado</h3>
+              <small>para futura integração</small>
+            </div>
+            <div class="section-body">
+              <pre class="payload" id="payloadText">{}</pre>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const labs = [
+      { key: "neutro", label: "Neutrófilos", opts: [["ok", ">1500", "normal"], ["warn", "1000-1500", "warn"], ["block", "<1000", "danger"]] },
+      { key: "plaquetas", label: "Plaquetas", opts: [["ok", ">100k", "normal"], ["warn", "50-100k", "warn"], ["block", "<50k", "danger"]] },
+      { key: "hb", label: "Hemoglobina", opts: [["ok", ">10", "normal"], ["warn", "8-10", "warn"], ["block", "<8", "danger"]] },
+      { key: "creat", label: "Creatinina", opts: [["ok", "<=1,5", "normal"], ["warn", "1,5-2,0", "warn"], ["block", ">2,0", "danger"]] },
+      { key: "tgoTgp", label: "TGO/TGP", opts: [["ok", "<=60", "normal"], ["warn", "60-120", "warn"], ["block", ">120", "danger"]] },
+      { key: "bili", label: "Bilirrubina", opts: [["ok", "normal", "normal"], ["warn", "alta leve", "warn"], ["block", "alta importante", "danger"]] }
+    ];
+
+    const tox = [
+      { key: "nausea", label: "Náusea" },
+      { key: "vomito", label: "Vômitos" },
+      { key: "diarreia", label: "Diarreia" },
+      { key: "mucosite", label: "Mucosite" },
+      { key: "neuropatia", label: "Neuropatia" },
+      { key: "fadiga", label: "Fadiga" }
+    ];
+
+    const alarms = [
+      { key: "febre", title: "Febre >= 38 C", sub: "risco de neutropenia febril", level: "red" },
+      { key: "dispneia", title: "Dispneia em repouso", sub: "avaliar hipoxemia/TEP/infecção", level: "red" },
+      { key: "sangramento", title: "Sangramento ativo", sub: "avaliar plaquetas/coagulopatia", level: "red" },
+      { key: "confusao", title: "Confusão mental", sub: "risco metabólico/infeccioso", level: "red" },
+      { key: "cateter", title: "Cateter inflamado", sub: "dor, rubor ou secreção", level: "yellow" },
+      { key: "antibiotico", title: "Antibiótico recente", sub: "revisar infecção ativa", level: "yellow" }
+    ];
+
+    const state = {
+      ecog: null,
+      labs: {},
+      tox: {},
+      alarms: {}
+    };
+
+    function q(id) { return document.getElementById(id); }
+    function value(id) { return (q(id)?.value || "").trim(); }
+    function num(id) {
+      const raw = value(id);
+      if (!raw) return null;
+      const n = Number(String(raw).replace(",", "."));
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function bsa() {
+      const p = num("peso");
+      const a = num("altura");
+      if (!p || !a) return null;
+      return Math.sqrt((p * a) / 3600);
+    }
+
+    function renderGroups() {
+      const labGrid = q("labGrid");
+      labGrid.innerHTML = labs.map(l => `
+        <div class="lab-item">
+          <div class="lab-title">${l.label}</div>
+          <div class="seg" data-type="lab" data-key="${l.key}">
+            ${l.opts.map(([value, label, klass]) => `<button class="${klass}" data-value="${value}">${label}</button>`).join("")}
+          </div>
+        </div>
+      `).join("");
+
+      const toxGrid = q("toxGrid");
+      toxGrid.innerHTML = tox.map(t => `
+        <div class="lab-item">
+          <div class="lab-title">${t.label}</div>
+          <div class="seg" data-type="tox" data-key="${t.key}">
+            <button class="normal" data-value="0">G0</button>
+            <button class="normal" data-value="1">G1</button>
+            <button class="warn" data-value="2">G2</button>
+            <button class="danger" data-value="3">G3</button>
+            <button class="danger" data-value="4">G4</button>
+          </div>
+        </div>
+      `).join("");
+
+      const alarmGrid = q("alarmGrid");
+      alarmGrid.innerHTML = alarms.map(a => `
+        <button class="alarm" data-key="${a.key}">
+          <strong>${a.title}</strong>
+          <small>${a.sub}</small>
+        </button>
+      `).join("");
+    }
+
+    function bindEvents() {
+      document.body.addEventListener("click", (event) => {
+        const btn = event.target.closest("button");
+        if (!btn) return;
+
+        if (btn.id === "sampleBtn") return loadSample();
+        if (btn.id === "summaryBtn") return update();
+        if (btn.id === "clearBtn") return clearAll();
+
+        const group = btn.closest(".seg");
+        if (group) {
+          event.preventDefault();
+          const type = group.dataset.type;
+          const key = group.dataset.key;
+          const value = btn.dataset.value;
+          group.querySelectorAll("button").forEach(b => b.classList.remove("on"));
+          if (type === "lab") {
+            state.labs[key] = state.labs[key] === value ? null : value;
+            if (state.labs[key]) btn.classList.add("on");
+          } else if (type === "tox") {
+            state.tox[key] = state.tox[key] === value ? null : value;
+            if (state.tox[key]) btn.classList.add("on");
+          } else if (group.dataset.group === "ecog") {
+            state.ecog = state.ecog === value ? null : value;
+            if (state.ecog) btn.classList.add("on");
+          }
+          update();
+        }
+
+        if (btn.classList.contains("alarm")) {
+          const key = btn.dataset.key;
+          state.alarms[key] = !state.alarms[key];
+          btn.classList.toggle("on", Boolean(state.alarms[key]));
+          update();
+        }
+      });
+
+      document.querySelectorAll("input, select, textarea").forEach(el => {
+        el.addEventListener("input", update);
+        el.addEventListener("change", update);
+      });
+    }
+
+    function labDays() {
+      const raw = value("labDate");
+      if (!raw) return null;
+      const d = new Date(raw + "T00:00:00");
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      return Math.floor((today - d) / 86400000);
+    }
+
+    function selectedLabels(collection, source) {
+      return Object.entries(collection)
+        .filter(([, v]) => v !== null && v !== false && v !== undefined)
+        .map(([key, val]) => {
+          const item = source.find(x => x.key === key);
+          return item ? `${item.label || item.title}: ${val}` : `${key}: ${val}`;
+        });
+    }
+
+    function evaluate() {
+      const blockers = [];
+      const review = [];
+      const temp = num("temp");
+      const spo2 = num("spo2");
+      const pas = num("pas");
+      const days = labDays();
+
+      if (temp !== null && temp >= 38) blockers.push("febre >= 38 C");
+      if (spo2 !== null && spo2 < 92) blockers.push("SpO2 < 92%");
+      if (pas !== null && pas < 90) blockers.push("hipotensão sistólica");
+      if (state.ecog && Number(state.ecog) >= 3) blockers.push(`ECOG ${state.ecog}`);
+      if (state.ecog === "2") review.push("ECOG 2");
+
+      Object.entries(state.labs).forEach(([key, val]) => {
+        const label = labs.find(l => l.key === key)?.label || key;
+        if (val === "block") blockers.push(`${label} em faixa de bloqueio`);
+        if (val === "warn") review.push(`${label} em faixa de atenção`);
+      });
+
+      Object.entries(state.tox).forEach(([key, val]) => {
+        const label = tox.find(t => t.key === key)?.label || key;
+        const grade = Number(val);
+        if (grade >= 3) blockers.push(`${label} G${grade}`);
+        else if (grade === 2) review.push(`${label} G2`);
+      });
+
+      Object.entries(state.alarms).forEach(([key, on]) => {
+        if (!on) return;
+        const alarm = alarms.find(a => a.key === key);
+        if (alarm?.level === "red") blockers.push(alarm.title);
+        else review.push(alarm?.title || key);
+      });
+
+      if (days !== null) {
+        if (days > 30) blockers.push(`laboratório muito antigo (${days} dias)`);
+        else if (days > 7) review.push(`laboratório com ${days} dias`);
+      }
+
+      if (blockers.length) return { color: "red", title: "Segurar QT e chamar médico", reasons: blockers, risk: "Alto" };
+      if (review.length) return { color: "yellow", title: "Revisar antes de liberar", reasons: review, risk: "Médio" };
+      return { color: "green", title: "Apto para QT", reasons: ["Sem bloqueios preenchidos até o momento."], risk: "Baixo" };
+    }
+
+    function payload(result) {
+      return {
+        version: "triagem-qt-v18-preview",
+        safety: {
+          previewOnly: true,
+          requiresMedicalValidation: true,
+          patientId: null,
+          encounterId: null
+        },
+        paciente: {
+          nome: value("nome") || null,
+          idade: value("idade") || null,
+          ciclo: value("ciclo") || null,
+          protocolo: value("protocolo") || null
+        },
+        antropometria: {
+          pesoKg: value("peso") || null,
+          alturaCm: value("altura") || null,
+          superficieCorporal: bsa() ? Number(bsa().toFixed(2)) : null
+        },
+        sinaisVitais: {
+          pa: value("pas") || value("pad") ? `${value("pas") || "__"}/${value("pad") || "__"}` : null,
+          spo2: value("spo2") || null,
+          temperatura: value("temp") || null
+        },
+        ecog: state.ecog,
+        laboratorio: {
+          data: value("labDate") || null,
+          diasDesdeColeta: labDays(),
+          faixas: state.labs
+        },
+        toxicidades: state.tox,
+        alarmes: Object.keys(state.alarms).filter(k => state.alarms[k]),
+        resultado: {
+          status: result.title,
+          risco: result.risk,
+          motivos: result.reasons
+        },
+        observacoes: value("obs") || null
+      };
+    }
+
+    function summary(result, data) {
+      const lines = [];
+      lines.push("TRIAGEM PRE-QT - ENFERMAGEM");
+      lines.push("Status: " + result.title.toUpperCase());
+      lines.push("");
+      lines.push("Paciente: " + (data.paciente.nome || "__"));
+      lines.push("Idade: " + (data.paciente.idade || "__") + " | Ciclo: " + (data.paciente.ciclo || "__") + " | Protocolo: " + (data.paciente.protocolo || "__"));
+      lines.push("Peso/altura/SC: " + (data.antropometria.pesoKg || "__") + " kg / " + (data.antropometria.alturaCm || "__") + " cm / " + (data.antropometria.superficieCorporal || "__") + " m2");
+      lines.push("PA: " + (data.sinaisVitais.pa || "__") + " | SpO2: " + (data.sinaisVitais.spo2 || "__") + "% | Temp.: " + (data.sinaisVitais.temperatura || "__") + " C | ECOG: " + (data.ecog || "__"));
+      lines.push("");
+      lines.push("Motivos/alertas:");
+      result.reasons.forEach(r => lines.push("- " + r));
+      lines.push("");
+      lines.push("Laboratorio:");
+      const labSelected = selectedLabels(data.laboratorio.faixas, labs);
+      lines.push(labSelected.length ? labSelected.map(x => "- " + x).join("\n") : "- Sem dados laboratoriais selecionados.");
+      lines.push("");
+      lines.push("Toxicidades:");
+      const toxSelected = selectedLabels(data.toxicidades, tox);
+      lines.push(toxSelected.length ? toxSelected.map(x => "- " + x).join("\n") : "- Sem toxicidade selecionada.");
+      lines.push("");
+      lines.push("Observacoes: " + (data.observacoes || ""));
+      lines.push("");
+      lines.push("Conduta: sugestao de triagem. Requer validacao medica antes de liberar, adiar ou modificar tratamento.");
+      return lines.join("\n");
+    }
+
+    function update() {
+      const result = evaluate();
+      const data = payload(result);
+      const panel = q("semaforo");
+      panel.className = "semaforo " + result.color;
+      q("statusTitle").textContent = result.title;
+      q("statusReasons").innerHTML = result.reasons.slice(0, 7).map(r => `<li>${r}</li>`).join("");
+      const sc = bsa();
+      q("scValue").textContent = sc ? sc.toFixed(2) : "--";
+      q("riskValue").textContent = result.risk;
+      const days = labDays();
+      q("labAge").textContent = days === null ? "--" : days === 0 ? "Hoje" : `${days}d`;
+      q("summaryText").textContent = summary(result, data);
+      q("payloadText").textContent = JSON.stringify(data, null, 2);
+    }
+
+    function loadSample() {
+      q("nome").value = "Maria Aparecida Santos";
+      q("idade").value = "58";
+      q("ciclo").value = "2";
+      q("protocolo").value = "CarboTaxol";
+      q("peso").value = "67";
+      q("altura").value = "162";
+      q("pas").value = "118";
+      q("pad").value = "74";
+      q("spo2").value = "97";
+      q("temp").value = "36.8";
+      const today = new Date();
+      q("labDate").value = today.toISOString().slice(0, 10);
+      state.ecog = "1";
+      state.labs = { neutro: "ok", plaquetas: "ok", hb: "warn", creat: "ok", tgoTgp: "ok" };
+      state.tox = { nausea: "1", fadiga: "2" };
+      state.alarms = {};
+      document.querySelectorAll(".seg button, .alarm").forEach(b => b.classList.remove("on"));
+      document.querySelector('[data-group="ecog"] [data-value="1"]').classList.add("on");
+      Object.entries(state.labs).forEach(([k, v]) => {
+        document.querySelector(`[data-type="lab"][data-key="${k}"] [data-value="${v}"]`)?.classList.add("on");
+      });
+      Object.entries(state.tox).forEach(([k, v]) => {
+        document.querySelector(`[data-type="tox"][data-key="${k}"] [data-value="${v}"]`)?.classList.add("on");
+      });
+      q("obs").value = "Paciente sem febre, hidratada, queixa fadiga moderada. Orientado revisar Hb e manter observação.";
+      update();
+    }
+
+    function clearAll() {
+      document.querySelectorAll("input, select, textarea").forEach(el => el.value = "");
+      state.ecog = null;
+      state.labs = {};
+      state.tox = {};
+      state.alarms = {};
+      document.querySelectorAll(".seg button, .alarm").forEach(b => b.classList.remove("on"));
+      update();
+    }
+
+    renderGroups();
+    bindEvents();
+    update();
+  </script>
+</body>
+</html>

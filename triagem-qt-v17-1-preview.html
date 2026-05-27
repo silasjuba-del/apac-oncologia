@@ -1,0 +1,2314 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Triagem QT — Enfermagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --navy:#0D1B3E;--navy2:#162C5E;--teal:#0E7490;--teal2:#0c647a;
+  --green:#15803D;--green2:#166534;--amber:#B45309;--red:#B91C1C;
+  --slate:#64748B;--border:#CBD5E1;--bg:#F1F5F9;
+  --font:'Plus Jakarta Sans',sans-serif;--mono:'JetBrains Mono',monospace;--r:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);min-height:100vh;display:flex;justify-content:center;padding:20px}
+.shell{width:100%;max-width:920px;background:#fff;border-radius:16px;box-shadow:0 4px 40px rgba(13,27,62,.13);overflow:hidden;min-height:calc(100vh - 40px);display:flex;flex-direction:column}
+
+.header{background:var(--navy);padding:14px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.hdr-logo{width:38px;height:38px;background:var(--teal);border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.hdr-title{color:#fff;font-size:14px;font-weight:800;line-height:1.2}
+.hdr-sub{color:rgba(255,255,255,.45);font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-top:2px}
+.hdr-info{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.hdr-pt{background:rgba(14,116,144,.25);border:1px solid var(--teal);color:rgba(255,255,255,.9);font-size:11px;font-weight:700;padding:3px 11px;border-radius:20px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hdr-meta{display:flex;gap:8px;font-size:9.5px;color:rgba(255,255,255,.55);font-weight:600}
+
+.steps-wrap{padding:14px 20px 0;flex-shrink:0}
+.steps{display:flex;align-items:center}
+.step{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;min-width:0}
+.step-c{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid var(--border);background:#fff;color:var(--slate);transition:all .3s;flex-shrink:0}
+.step-c.active{background:var(--teal);border-color:var(--teal);color:#fff;box-shadow:0 0 0 3px rgba(14,116,144,.18)}
+.step-c.done{background:var(--green);border-color:var(--green);color:#fff}
+.step-lbl{font-size:9px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.3px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
+.step-lbl.active{color:var(--teal)}.step-lbl.done{color:var(--green)}
+.conn{flex:1;height:2px;background:var(--border);margin-bottom:16px;transition:background .3s;min-width:4px}
+.conn.done{background:var(--green)}
+
+.page{display:none;flex:1;padding:16px 20px 22px;flex-direction:column;gap:11px}
+.page.active{display:flex}
+
+.card{background:#fff;border:1.5px solid var(--border);border-radius:var(--r);overflow:hidden}
+.card-hdr{padding:9px 14px;background:#FAFBFD;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.card-icon{font-size:15px;flex-shrink:0}
+.card-title{font-size:13px;font-weight:700;color:var(--navy)}
+.card-hint{font-size:11px;color:var(--slate);margin-left:auto}
+.card-body{padding:12px}
+
+.field{margin-bottom:10px}.field:last-child{margin-bottom:0}
+.lbl{display:block;font-size:11px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+input[type=text],input[type=number],textarea,select{
+  width:100%;background:#F8FAFF;border:1.5px solid var(--border);border-radius:8px;
+  padding:9px 12px;font-family:var(--font);font-size:14px;color:var(--navy);
+  outline:none;transition:border-color .15s,background .15s;
+}
+input:focus,textarea:focus,select:focus{border-color:var(--teal);background:#fff}
+textarea{resize:vertical;min-height:70px;line-height:1.55}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.vitals-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
+.vital-box{text-align:center}
+.vital-box .lbl{text-align:center}
+.vital-unit{font-size:10px;color:var(--slate);font-weight:700;margin-top:3px;text-align:center}
+.pa-wrap{display:flex;align-items:center;gap:5px}
+.pa-wrap input{text-align:center;font-size:16px;font-weight:700;padding:9px 4px}
+.pa-slash{font-size:22px;font-weight:800;color:var(--navy);flex-shrink:0;line-height:1}
+
+.proto-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.proto-pill{padding:5px 11px;border-radius:20px;border:1.5px solid var(--border);font-size:12px;font-weight:700;background:#F8FAFF;color:var(--navy);cursor:pointer;transition:all .12s;user-select:none;font-family:var(--font)}
+.proto-pill:hover{border-color:var(--teal);background:#EFF6FF}
+.proto-pill.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.proto-input-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.proto-input-row input{flex:1}
+
+.ecog-grid{display:flex;flex-direction:column;gap:5px;margin-top:4px}
+.ecog-item{display:flex;align-items:flex-start;gap:10px;padding:7px 11px;border-radius:9px;border:1.5px solid var(--border);cursor:pointer;transition:all .15s;user-select:none}
+.ecog-item:hover{border-color:var(--teal);background:#EFF6FF}
+.ecog-item.on{border-color:var(--teal);background:#EFF6FF}
+.ecog-badge{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0;background:var(--border);color:var(--navy)}
+.ecog-item.on .ecog-badge{background:var(--teal);color:#fff}
+.ecog-text{font-size:12px;font-weight:600;color:var(--navy);line-height:1.3;padding-top:1px}
+.ecog-sub{font-size:11px;color:var(--slate);font-weight:400;margin-top:1px;line-height:1.3}
+
+.atb-row{display:flex;gap:8px;margin-top:4px}
+.atb-btn{flex:1;padding:10px;border-radius:9px;border:1.5px solid var(--border);background:#F8FAFF;color:var(--navy);font-weight:700;font-size:13px;cursor:pointer;font-family:var(--font);transition:all .12s}
+.atb-btn:hover{border-color:var(--teal);background:#EFF6FF}
+.atb-btn.on-sim{background:var(--red);border-color:var(--red);color:#fff}
+.atb-btn.on-nao{background:var(--green);border-color:var(--green);color:#fff}
+
+.tox-list{display:flex;flex-direction:column;gap:3px}
+.tox-row{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid #F1F5F9;flex-wrap:wrap}
+.tox-row:last-child{border-bottom:none}
+.tox-name{font-size:12px;font-weight:600;color:var(--navy);min-width:116px;flex-shrink:0;padding-top:4px}
+.tox-btns{display:flex;gap:3px;flex-wrap:wrap;flex:1;align-items:center}
+.dias-group{display:flex;gap:3px;margin-left:6px;padding-left:8px;border-left:2px solid #CBD5E1;align-items:center}
+.dias-btn{padding:4px 10px;border-radius:7px;border:1.5px solid #CBD5E1;font-size:11px;font-weight:700;cursor:pointer;background:#F1F5F9;color:#475569;font-family:var(--font);white-space:nowrap;transition:all .12s}
+.dias-btn:hover{transform:scale(1.05);border-color:var(--teal)}
+.dias-btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.gb{padding:4px 9px;border-radius:7px;border:1.5px solid transparent;font-size:11px;font-weight:700;cursor:pointer;transition:all .12s;user-select:none;font-family:var(--font);white-space:nowrap}
+.gb:hover{transform:scale(1.05)}
+.G0{background:#F0FDF4;border-color:#86EFAC;color:#15803D}.G0.on{background:#15803D;border-color:#15803D;color:#fff}
+.G1{background:#FFFBEB;border-color:#FDE68A;color:#92400E}.G1.on{background:#D97706;border-color:#D97706;color:#fff}
+.G2{background:#FFF7ED;border-color:#FDBA74;color:#C2410C}.G2.on{background:#EA580C;border-color:#EA580C;color:#fff}
+.G3{background:#FEF2F2;border-color:#FCA5A5;color:#991B1B}.G3.on{background:#DC2626;border-color:#DC2626;color:#fff}
+.G4{background:#FDF2F8;border-color:#F9A8D4;color:#9D174D}.G4.on{background:#9D174D;border-color:#9D174D;color:#fff}
+
+.lab-date-row{display:flex;align-items:center;gap:6px;margin-top:6px}
+.lab-date-row label{font-size:10px;font-weight:700;color:var(--slate);white-space:nowrap}
+.lab-date-row input{padding:5px 8px;font-size:11px;background:#F8FAFF;border:1.5px solid var(--border);border-radius:6px;flex:1;min-width:0}
+.lab-date-info{font-size:10px;font-weight:700;color:var(--teal);padding:3px 8px;background:#EFF6FF;border-radius:6px;border:1px solid #BFDBFE;white-space:nowrap}
+.lab-date-info.old{color:var(--amber);background:#FFFBEB;border-color:#FDE68A}
+.lab-date-info.veryold{color:var(--red);background:#FEF2F2;border-color:#FCA5A5}
+.lab-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lab-card{border:1.5px solid var(--border);border-radius:10px;overflow:hidden}
+.lab-card-hdr{background:#FAFBFD;padding:7px 10px;font-size:11px;font-weight:700;color:var(--navy);border-bottom:1px solid var(--border);text-align:center}
+.lab-card-body{padding:7px;display:flex;flex-direction:column;gap:4px}
+
+.alarme-card{background:#FEF2F2;border:2px solid #FCA5A5;border-radius:var(--r);overflow:hidden}
+.alarme-hdr{background:var(--red);padding:9px 14px;display:flex;align-items:center;gap:8px}
+.alarme-hdr-title{color:#fff;font-size:13px;font-weight:800}
+.alarme-body{padding:11px;display:flex;flex-direction:column;gap:5px}
+.alarme-item{display:flex;align-items:flex-start;gap:8px;padding:7px 10px;background:#fff;border-radius:8px;border:1.5px solid #FCA5A5;cursor:pointer;transition:all .15s;user-select:none}
+.alarme-item.on{background:var(--red);border-color:var(--red)}
+.alarme-item.on .alarme-item-text{color:#fff}
+.alarme-item.on .alarme-sub{color:rgba(255,255,255,.75)}
+.alarme-item.nega{background:#F0FDF4;border-color:#86EFAC;margin-top:8px}
+.alarme-item.nega .alarme-item-text{color:var(--green)}
+.alarme-item.nega .alarme-sub{color:#15803D}
+.alarme-item.nega.on{background:var(--green);border-color:var(--green)}
+.alarme-item.nega.on .alarme-item-text{color:#fff}
+.alarme-item.nega.on .alarme-sub{color:rgba(255,255,255,.85)}
+.alarme-item-icon{font-size:15px;flex-shrink:0;margin-top:1px}
+.alarme-item-text{font-size:12px;font-weight:600;color:var(--red);line-height:1.4}
+.alarme-sub{font-size:10px;color:#991B1B;font-weight:400;margin-top:1px}
+
+.conduta-box{border-radius:10px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px;border:2px solid transparent}
+.conduta-icon{font-size:20px;flex-shrink:0}
+.conduta-title{font-size:13px;font-weight:800}
+.conduta-reason{font-size:11px;font-weight:500;margin-top:3px;line-height:1.5;opacity:.85}
+.cond-apto{background:#F0FDF4;border-color:#86EFAC;color:var(--green)}
+.cond-medico{background:#FFFBEB;border-color:#FDE68A;color:var(--amber)}
+.cond-adiar{background:#FEF2F2;border-color:#FCA5A5;color:var(--red)}
+
+.concl-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.cbtn{padding:12px 6px;border-radius:10px;border:2px solid transparent;font-size:11px;font-weight:700;cursor:pointer;text-align:center;font-family:var(--font);line-height:1.35}
+.cbtn-a{background:#F0FDF4;border-color:#86EFAC;color:var(--green)}.cbtn-a.on{background:var(--green);border-color:var(--green);color:#fff}
+.cbtn-m{background:#FFFBEB;border-color:#FDE68A;color:var(--amber)}.cbtn-m.on{background:var(--amber);border-color:var(--amber);color:#fff}
+.cbtn-r{background:#FEF2F2;border-color:#FCA5A5;color:var(--red)}.cbtn-r.on{background:var(--red);border-color:var(--red);color:#fff}
+
+.alarme-resumo{background:#FEF2F2;border:2px solid var(--red);border-radius:10px;padding:12px;display:none;margin-bottom:12px}
+.alarme-resumo-title{font-size:13px;font-weight:800;color:var(--red);margin-bottom:6px}
+.alarme-resumo-list{display:flex;flex-direction:column;gap:3px}
+.alarme-resumo-item{font-size:12px;font-weight:600;color:var(--red);display:flex;gap:5px;line-height:1.4}
+
+.res-wrap{background:#F8FAFF;border:1.5px solid #C7D2FE;border-radius:var(--r);overflow:hidden}
+.res-hdr{background:var(--navy);padding:10px 14px;display:flex;align-items:center;justify-content:space-between}
+.res-hdr-title{color:#fff;font-size:12px;font-weight:700}
+.res-body{padding:12px;font-family:var(--mono);font-size:11px;line-height:1.8;color:#1e293b;white-space:pre-wrap;max-height:300px;overflow-y:auto}
+
+.doc-tabs{display:flex;gap:4px;border-bottom:2px solid var(--border);flex-wrap:wrap}
+.doc-tab{padding:9px 14px;font-size:12px;font-weight:700;color:var(--slate);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.doc-tab:hover{color:var(--navy)}.doc-tab.active{color:var(--teal);border-bottom-color:var(--teal)}
+.doc-panel{display:none;padding:14px}.doc-panel.active{display:block}
+.doc-preview{background:#F8FAFF;border:1.5px solid #C7D2FE;border-radius:var(--r);overflow:hidden;margin-top:10px}
+.doc-prev-hdr{background:var(--navy);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.doc-prev-title{color:#fff;font-size:12px;font-weight:700}
+.doc-prev-body{padding:14px;font-family:var(--mono);font-size:11.5px;line-height:1.8;color:#1e293b;white-space:pre-wrap;max-height:400px;overflow-y:auto}
+.doc-actions{display:flex;gap:6px;align-items:center}
+.ret-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.ret-btn{padding:8px 18px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-weight:700;background:#F8FAFF;color:var(--navy);cursor:pointer;font-family:var(--font)}
+.ret-btn:hover{border-color:var(--teal);background:#EFF6FF}.ret-btn.on{background:var(--teal);border-color:var(--teal);color:#fff}
+
+.btn{border:none;border-radius:9px;padding:10px 20px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--teal);color:#fff}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-conclude{background:var(--green);color:#fff;padding:14px 36px;font-size:15px}
+.btn-ghost{background:#EFF6FF;color:var(--navy);border:1.5px solid #C7D2FE}
+.btn-copy{background:var(--green);color:#fff}
+.btn-print{background:var(--amber);color:#fff}
+.btn-sm{padding:6px 13px;font-size:11.5px}
+
+.nav-bar{flex-shrink:0;padding:12px 20px;border-top:1px solid var(--border);background:#FAFBFD;display:flex;align-items:center;gap:10px}
+.toast{position:fixed;bottom:24px;right:20px;background:var(--green);color:#fff;padding:9px 20px;border-radius:30px;font-size:12px;font-weight:700;opacity:0;pointer-events:none;transform:translateY(6px);transition:all .2s;z-index:999}
+.toast.show{opacity:1;transform:translateY(0)}
+.preview-note{margin:10px 20px 0;background:#EFF6FF;border:1.5px solid #93C5FD;color:#1E3A8A;border-radius:10px;padding:9px 12px;font-size:11px;font-weight:700;line-height:1.45;flex-shrink:0}
+.grade-guide{background:#F8FAFF;border:1.5px solid #C7D2FE;border-radius:10px;overflow:hidden;margin-bottom:10px}
+.guide-toggle{width:100%;border:0;background:#EEF2FF;color:var(--navy);font-family:var(--font);font-size:12px;font-weight:800;padding:10px 12px;cursor:pointer;text-align:left;display:flex;justify-content:space-between;gap:10px}
+.guide-body{display:none;padding:10px 12px;grid-template-columns:repeat(2,1fr);gap:8px;background:#fff}
+.guide-body.open{display:grid}
+.guide-item{border:1px solid #E2E8F0;border-radius:8px;padding:8px;background:#FAFBFD}
+.guide-item b{display:block;color:var(--navy);font-size:11px;margin-bottom:4px;text-transform:uppercase}
+.guide-item span{display:block;color:#475569;font-size:10.5px;line-height:1.45}
+.payload-box{background:#0F172A;color:#E2E8F0;border-radius:10px;padding:10px;font-family:var(--mono);font-size:10.5px;line-height:1.55;white-space:pre-wrap;max-height:210px;overflow:auto;margin-top:10px}
+.payload-hint{font-size:10.5px;color:var(--slate);font-weight:600;margin-top:6px;line-height:1.45}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<div class="header">
+  <div class="hdr-logo">🩺</div>
+  <div>
+    <div class="hdr-title">Triagem de Quimioterapia</div>
+    <div class="hdr-sub">Hospital do Bem · Enfermagem · Patos-PB</div>
+  </div>
+  <div class="hdr-info">
+    <div class="hdr-pt" id="hdrPt">Novo Paciente</div>
+    <div class="hdr-meta">
+      <span id="hdrCount">Paciente 1</span>
+      <span>·</span>
+      <span id="hdrTimer">00:00</span>
+    </div>
+  </div>
+</div>
+
+<div class="preview-note">
+  Preview v17.1: mantém o fluxo visual do v17 e acrescenta itens de segurança para a enfermagem: internação recente, mais toxicidades relevantes, guia rápido de graus e payload estruturado para futura integração com o prontuário.
+</div>
+
+<div class="steps-wrap">
+  <div class="steps">
+    <div class="step"><div class="step-c active" id="sc0">1</div><div class="step-lbl active" id="sl0">Identificação</div></div>
+    <div class="conn" id="cn0"></div>
+    <div class="step"><div class="step-c" id="sc1">2</div><div class="step-lbl" id="sl1">Toxicidade</div></div>
+    <div class="conn" id="cn1"></div>
+    <div class="step"><div class="step-c" id="sc2">3</div><div class="step-lbl" id="sl2">Conclusão</div></div>
+    <div class="conn" id="cn2"></div>
+    <div class="step"><div class="step-c" id="sc3">4</div><div class="step-lbl" id="sl3">Documentos</div></div>
+  </div>
+</div>
+
+<!-- ═══ PÁG 1 ═══ -->
+<div class="page active" id="page0">
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">👤</span><div class="card-title">Identificação</div></div>
+    <div class="card-body">
+      <div class="g2">
+        <div class="field" style="grid-column:span 2">
+          <label class="lbl">Nome completo *</label>
+          <input type="text" id="nome" placeholder="Nome do paciente"/>
+        </div>
+        <div class="field">
+          <label class="lbl">Idade</label>
+          <input type="number" id="idade" placeholder="Ex: 65" min="0" max="130"/>
+        </div>
+        <div class="field">
+          <label class="lbl">Ciclo nº</label>
+          <input type="number" id="ciclo" placeholder="Ex: 3" min="1" max="50"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">📝</span><div class="card-title">Medicações de Uso Contínuo</div></div>
+    <div class="card-body">
+      <label class="lbl">Liste medicações em uso (com doses e frequência)</label>
+      <textarea id="medCont" placeholder="Ex: Losartana 50mg 1× ao dia&#10;Metformina 500mg 2× ao dia&#10;AAS 100mg 1× ao dia" rows="4"></textarea>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">💊</span><div class="card-title">Protocolo de Quimioterapia</div></div>
+    <div class="card-body">
+      <label class="lbl">Protocolo atual</label>
+      <div class="proto-row" id="protoRow"></div>
+      <div class="proto-input-row" id="protoInputRow" style="display:none">
+        <input type="text" id="protoCustom" placeholder="Digite o protocolo..."/>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">📊</span><div class="card-title">Sinais Vitais</div></div>
+    <div class="card-body">
+      <div class="vitals-row">
+        <div class="vital-box">
+          <label class="lbl">Pressão Arterial</label>
+          <div class="pa-wrap">
+            <input type="number" id="pa_sis" placeholder="120" min="60" max="300"/>
+            <span class="pa-slash">/</span>
+            <input type="number" id="pa_dia" placeholder="80" min="30" max="200"/>
+          </div>
+          <div class="vital-unit">mmHg</div>
+        </div>
+        <div class="vital-box">
+          <label class="lbl">SpO₂</label>
+          <input type="number" id="spo2" placeholder="98" min="50" max="100" style="text-align:center;font-size:16px;font-weight:700"/>
+          <div class="vital-unit">%</div>
+        </div>
+        <div class="vital-box">
+          <label class="lbl">FC</label>
+          <input type="number" id="fc" placeholder="80" min="20" max="300" style="text-align:center;font-size:16px;font-weight:700"/>
+          <div class="vital-unit">bpm</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">🏥</span><div class="card-title">Internação recente</div></div>
+    <div class="card-body">
+      <label class="lbl">Houve internação recente?</label>
+      <div class="atb-row" style="gap:6px;flex-wrap:wrap">
+        <button class="atb-btn" id="intNega" onclick="setInternacao(0)" style="flex:1">Nega</button>
+        <button class="atb-btn" id="intMenor7" onclick="setInternacao(1)" style="flex:1">&lt; 7 dias</button>
+        <button class="atb-btn" id="intMaior7" onclick="setInternacao(2)" style="flex:1">&gt; 7 dias</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">💉</span><div class="card-title">Uso recente de antibiótico</div></div>
+    <div class="card-body">
+      <label class="lbl">Está em uso ou usou recentemente?</label>
+      <div class="atb-row">
+        <button class="atb-btn" id="atbSim" onclick="setAtb(true)">✓ Sim</button>
+        <button class="atb-btn" id="atbNao" onclick="setAtb(false)">✗ Não</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">🏃</span><div class="card-title">ECOG — Performance Status</div></div>
+    <div class="card-body">
+      <div class="ecog-grid">
+        <div class="ecog-item" onclick="pickEcog(0,this)"><div class="ecog-badge">0</div><div><div class="ecog-text">Totalmente ativo</div><div class="ecog-sub">Sem restrição.</div></div></div>
+        <div class="ecog-item" onclick="pickEcog(1,this)"><div class="ecog-badge">1</div><div><div class="ecog-text">Atividades leves</div><div class="ecog-sub">Sintomático, ambulatório.</div></div></div>
+        <div class="ecog-item" onclick="pickEcog(2,this)"><div class="ecog-badge">2</div><div><div class="ecog-text">Ambulatório &lt;50% no leito</div><div class="ecog-sub">Autocuidado, incapaz de trabalhar.</div></div></div>
+        <div class="ecog-item" onclick="pickEcog(3,this)"><div class="ecog-badge">3</div><div><div class="ecog-text">&gt;50% no leito</div><div class="ecog-sub">Cuidados limitados.</div></div></div>
+        <div class="ecog-item" onclick="pickEcog(4,this)"><div class="ecog-badge">4</div><div><div class="ecog-text">Restrito ao leito</div><div class="ecog-sub">Incapaz de autocuidado.</div></div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ PÁG 2 ═══ -->
+<div class="page" id="page1">
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">⚗️</span><div class="card-title">Efeitos Colaterais — CTCAE v5.0</div></div>
+    <div class="card-body">
+      <div id="negaSintomasBox" onclick="toggleNegaSintomas()" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#F0FDF4;border:2px solid #86EFAC;border-radius:9px;margin-bottom:10px;cursor:pointer;user-select:none;transition:all .15s">
+        <span style="font-size:22px;flex-shrink:0">✅</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:800;color:#15803D">NEGA SINTOMAS / EFEITOS COLATERAIS</div>
+          <div style="font-size:11px;color:#166534;margin-top:2px">Paciente não relata nenhum efeito colateral</div>
+        </div>
+      </div>
+      <div class="grade-guide">
+        <button type="button" class="guide-toggle" onclick="toggleGuide()">
+          Guia rápido para graduação quando houver dúvida
+          <span>abrir / fechar</span>
+        </button>
+        <div class="guide-body" id="gradeGuideBody">
+          <div class="guide-item"><b>Diarreia</b><span>G1: até 3 evacuações acima do basal. G2: 4-6/dia. G3: ≥7/dia, incontinência, necessidade de hidratação ou internação.</span></div>
+          <div class="guide-item"><b>Vômitos</b><span>G1: 1-2 episódios/dia. G2: 3-5/dia. G3: ≥6/dia, hidratação venosa, perda ponderal ou repercussão clínica.</span></div>
+          <div class="guide-item"><b>Mucosite</b><span>G1: dor/eritema leve. G2: úlceras, ainda alimenta. G3: não consegue dieta oral adequada. G4: risco vital.</span></div>
+          <div class="guide-item"><b>Dispneia</b><span>G1: aos esforços moderados. G2: pequenos esforços. G3: em repouso ou limitação importante. G4: suporte ventilatório.</span></div>
+          <div class="guide-item"><b>Neuropatia</b><span>G1: parestesia leve. G2: limita atividades instrumentais. G3: limita autocuidado, queda ou dor incapacitante.</span></div>
+          <div class="guide-item"><b>Dor / fadiga</b><span>G1: leve. G2: limita atividades instrumentais. G3: limita autocuidado, impede rotina ou exige avaliação médica imediata.</span></div>
+        </div>
+      </div>
+      <div class="tox-list" id="toxList"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">🔬</span><div class="card-title">Laboratório</div></div>
+    <div class="card-body">
+      <div class="lab-date-row">
+        <label>Data do exame:</label>
+        <input type="date" id="labDate"/>
+        <span class="lab-date-info" id="labDateInfo">—</span>
+      </div>
+      <div class="lab-grid" id="labGrid" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div class="alarme-card">
+    <div class="alarme-hdr"><span style="font-size:18px">🚨</span><div class="alarme-hdr-title">Sinais de Alerta — Marque os presentes</div></div>
+    <div class="alarme-body" id="alarmeBody"></div>
+  </div>
+
+  <div id="conductaWrap" style="display:none">
+    <div class="card">
+      <div class="card-hdr"><span class="card-icon">💡</span><div class="card-title">Conduta Sugerida</div></div>
+      <div class="card-body">
+        <div class="conduta-box" id="conductaBox">
+          <div class="conduta-icon" id="conductaIcon"></div>
+          <div><div class="conduta-title" id="conductaTitle"></div><div class="conduta-reason" id="conductaReason"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ PÁG 3 ═══ -->
+<div class="page" id="page2">
+
+  <div class="alarme-resumo" id="alarmeResumo">
+    <div class="alarme-resumo-title">🚨 Sinais de Alerta Identificados</div>
+    <div class="alarme-resumo-list" id="alarmeResumoList"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">✅</span><div class="card-title">Conclusão da Triagem</div></div>
+    <div class="card-body">
+      <div class="concl-row">
+        <button class="cbtn cbtn-a" onclick="setConc('apto',this)">✅ Apto para<br>Quimioterapia</button>
+        <button class="cbtn cbtn-m" onclick="setConc('medico',this)">👨‍⚕️ Referência<br>ao Médico</button>
+        <button class="cbtn cbtn-r" onclick="setConc('adiar',this)">⏸️ Adiar<br>Quimioterapia</button>
+      </div>
+      <div class="field">
+        <label class="lbl">Observações (opcional)</label>
+        <textarea id="obs" placeholder="Informações adicionais..." rows="3"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="res-wrap">
+    <div class="res-hdr">
+      <div class="res-hdr-title">📋 Resumo para o prontuário</div>
+      <button class="btn btn-copy btn-sm" onclick="copyRes()">📋 Copiar</button>
+    </div>
+    <div class="res-body" id="resBody">Preencha as páginas anteriores.</div>
+  </div>
+
+  <div class="res-wrap" style="margin-top:10px">
+    <div class="res-hdr">
+      <div class="res-hdr-title">🧩 Payload estruturado (preview)</div>
+      <button class="btn btn-copy btn-sm" onclick="copyPayload()">📋 Copiar</button>
+    </div>
+    <div class="card-body">
+      <div class="payload-hint">
+        Este bloco não altera o v17 oficial. Ele mostra como a triagem pode ser enviada ao prontuário/IA depois: dados separados por paciente, ciclo, toxicidades, laboratório, alarmes e conclusão.
+      </div>
+      <div class="payload-box" id="payloadBody">{}</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ PÁG 4 ═══ -->
+<div class="page" id="page3">
+
+  <div class="card">
+    <div class="card-hdr"><span class="card-icon">📄</span><div class="card-title">Documentos</div></div>
+    <div class="card-body" style="padding-bottom:0">
+      <div class="doc-tabs">
+        <div class="doc-tab active" onclick="switchDocTab('lab',this)">🔬 Exames</div>
+        <div class="doc-tab" onclick="switchDocTab('ret',this)">📅 Retorno</div>
+        <div class="doc-tab" onclick="switchDocTab('med',this)">💊 Medicações</div>
+      </div>
+    </div>
+
+    <div class="doc-panel active" id="dpLab">
+      <div class="doc-preview">
+        <div class="doc-prev-hdr">
+          <div class="doc-prev-title">🔬 Solicitação de Exames</div>
+          <div class="doc-actions">
+            <button class="btn btn-copy btn-sm" onclick="copyDocLab()">📋 Copiar</button>
+            <button class="btn btn-print btn-sm" onclick="printDoc('lab')">🖨️ Imprimir</button>
+          </div>
+        </div>
+        <div class="doc-prev-body" id="labDocBody"></div>
+      </div>
+    </div>
+
+    <div class="doc-panel" id="dpRet">
+      <div style="margin-bottom:10px">
+        <label class="lbl">Prazo de retorno</label>
+        <div class="ret-row">
+          <button class="ret-btn" onclick="setRet(7,this)">7 dias</button>
+          <button class="ret-btn" onclick="setRet(14,this)">14 dias</button>
+          <button class="ret-btn" onclick="setRet(21,this)">21 dias</button>
+        </div>
+      </div>
+      <div class="doc-preview">
+        <div class="doc-prev-hdr">
+          <div class="doc-prev-title">📅 Ficha de Retorno</div>
+          <div class="doc-actions">
+            <button class="btn btn-copy btn-sm" onclick="copyDocRet()">📋 Copiar</button>
+            <button class="btn btn-print btn-sm" onclick="printDoc('ret')">🖨️ Imprimir</button>
+          </div>
+        </div>
+        <div class="doc-prev-body" id="retDocBody"></div>
+      </div>
+    </div>
+
+    <div class="doc-panel" id="dpMed">
+      <div class="doc-preview">
+        <div class="doc-prev-hdr">
+          <div class="doc-prev-title">💊 Medicações — EV + Oral</div>
+          <div class="doc-actions">
+            <button class="btn btn-copy btn-sm" onclick="copyDocMed()">📋 Copiar</button>
+            <button class="btn btn-print btn-sm" onclick="printDoc('med')">🖨️ Imprimir</button>
+          </div>
+        </div>
+        <div class="doc-prev-body" id="medDocBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:center;padding-top:4px">
+    <button type="button" class="btn btn-conclude" onclick="concluirConsulta()">✓ Concluir Consulta</button>
+  </div>
+
+</div>
+
+<div class="nav-bar">
+  <button type="button" class="btn btn-ghost" id="btnBack" onclick="goBack()" style="display:none">← Voltar</button>
+  <div style="flex:1"></div>
+  <button type="button" class="btn btn-primary" id="btnNext" onclick="goNext()">Prosseguir →</button>
+</div>
+
+</div>
+<div class="toast" id="toast">✓ Copiado!</div>
+
+<script>
+// ════════════════════════════════
+// ESTADO
+// ════════════════════════════════
+var curP = 0;
+var conclusao = null;
+var ecogVal = null;
+var protoVal = '';
+var protoIsPoly = false;
+var atbUso = null;
+var internacaoVal = null; // 0=nega, 1=<7d, 2=>=7d
+var negaSintomas = false;
+var retDiasVal = null;
+var patientCounter = 1;
+var consultStart = new Date();
+
+// ════════════════════════════════
+// PROTOCOLOS (poly = 2+ drogas)
+// ════════════════════════════════
+var PROTOCOLOS = [
+  // poliquimioterapia
+  {name:'AC',                       poly:true},
+  {name:'FOLFOX',                   poly:true},
+  {name:'XELOX',                    poly:true},
+  {name:'FLOT',                     poly:true},
+  {name:'FOLFIRI',                  poly:true},
+  {name:'FOLFOXIRI',                poly:true},
+  {name:'Cisplatina + Docetaxel',   poly:true},
+  {name:'Cisplatina + Gencitabina', poly:true},
+  {name:'Carboplatina + Etoposídeo',poly:true},
+  {name:'Carboplatina + Pemetrexede',poly:true},
+  {name:'CarboTaxol',               poly:true},
+  {name:'DCF',                      poly:true},
+  // monoquimioterapia
+  {name:'Docetaxel',                poly:false},
+  {name:'Paclitaxel',               poly:false},
+  {name:'Carboplatina',             poly:false},
+  {name:'Cisplatina',               poly:false},
+  {name:'Capecitabina',             poly:false},
+  {name:'Topotecano',               poly:false},
+  {name:'Ifosfamida',               poly:false},
+  {name:'Bevacizumabe',             poly:false},
+  {name:'Outro',                    poly:false},
+];
+
+// ════════════════════════════════
+// CTCAE
+// ════════════════════════════════
+var TOX = [
+  {k:'nausea',     n:'Náusea',           gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Leve'},{g:2,l:'G2 Moderada'},{g:3,l:'G3 Grave/IV'}], dias:true},
+  {k:'vomito',     n:'Vômito',           gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 1–2×'},{g:2,l:'G2 3–5×'},{g:3,l:'G3 ≥6×'},{g:4,l:'G4'}], dias:true},
+  {k:'diarreia',   n:'Diarreia',         gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 <4×'},{g:2,l:'G2 4–6×'},{g:3,l:'G3 ≥7×'},{g:4,l:'G4'}], dias:true},
+  {k:'febre',      n:'Febre',            gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 38–39°'},{g:2,l:'G2 39–40°'},{g:3,l:'G3 >40°'},{g:4,l:'G4'}], dias:true},
+  {k:'apetite',    n:'Falta de apetite', gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Leve'},{g:2,l:'G2 Moderada'},{g:3,l:'G3 Severa'}], dias:true},
+  {k:'mucosite',   n:'Mucosite',         gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Eritema'},{g:2,l:'G2 Úlceras'},{g:3,l:'G3 Não come'},{g:4,l:'G4'}]},
+  {k:'neuropatia', n:'Neuropatia',       gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Assintom.'},{g:2,l:'G2 AVD inst.'},{g:3,l:'G3 AVD pessoal'},{g:4,l:'G4'}]},
+  {k:'artromialgia',n:'Artromialgia',    gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Leve'},{g:2,l:'G2 Moderada'},{g:3,l:'G3 Grave'}]},
+  {k:'dor',        n:'Dor',              gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Leve'},{g:2,l:'G2 Moderada'},{g:3,l:'G3 Intensa'},{g:4,l:'G4'}], dias:true},
+  {k:'fadiga',     n:'Fadiga',           gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Alivia repouso'},{g:2,l:'G2 Limita AVD inst.'},{g:3,l:'G3 Limita autocuidado'}], dias:true},
+  {k:'constipacao',n:'Constipação',      gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Ocasional'},{g:2,l:'G2 Persistente'},{g:3,l:'G3 Obstipação/impactação'}], dias:true},
+  {k:'tontura',    n:'Tontura',          gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Leve'},{g:2,l:'G2 Queda/limita rotina'},{g:3,l:'G3 Grave'}], dias:true},
+  {k:'sonolencia', n:'Sonolência',       gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Leve'},{g:2,l:'G2 Interfere AVD'},{g:3,l:'G3 Rebaixamento'}], dias:true},
+  {k:'edema',      n:'Edema',            gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Assintom.'},{g:2,l:'G2 Sintom.'},{g:3,l:'G3 Anasarca'}]},
+  {k:'dispneia',   n:'Dispneia',         gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Esf.mod.'},{g:2,l:'G2 Esf.mín.'},{g:3,l:'G3 Repouso'},{g:4,l:'G4'}]},
+  {k:'dorToracica',n:'Dor torácica',     gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Leve'},{g:2,l:'G2 Moderada'},{g:3,l:'G3 Intensa/repouso'},{g:4,l:'G4 Instável'}]},
+  {k:'palpitacao', n:'Palpitação',       gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Sem trat.'},{g:2,l:'G2 Trat.ind.'},{g:3,l:'G3 Grave'}]},
+  {k:'reacaoInfusional',n:'Reação infusional',gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Leve'},{g:2,l:'G2 Interrompe infusão'},{g:3,l:'G3 Recorrente/broncoesp.'},{g:4,l:'G4 Anafilaxia'}]},
+  {k:'extravasamento',n:'Extravasamento',gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 Suspeita'},{g:2,l:'G2 Dor/edema'},{g:3,l:'G3 Lesão/bolha'},{g:4,l:'G4 Necrose'}]},
+  {k:'rash',       n:'Rash Cutâneo',     gs:[{g:0,l:'G0 Ausente'},{g:1,l:'G1 <10%'},{g:2,l:'G2 10–30%'},{g:3,l:'G3 >30%'},{g:4,l:'G4'}]},
+  {k:'diurese',    n:'Diurese',          gs:[{g:0,l:'Normal'},{g:1,l:'Aumentada'},{g:2,l:'Reduzida'}]},
+  {k:'perdaPeso',  n:'Perda de peso',    gs:[{g:0,l:'Leve'},{g:1,l:'Moderada'},{g:2,l:'Acentuada'},{g:3,l:'Caquexia/Sarcopenia'}]},
+];
+
+var LAB = [
+  {k:'neutro', n:'Neutrófilos', gs:[{g:0,l:'> 1500',c:'G0'},{g:1,l:'1000–1500',c:'G1'},{g:2,l:'< 1000',c:'G3'}]},
+  {k:'hb',     n:'Hemoglobina', gs:[{g:0,l:'> 10 g/dL',c:'G0'},{g:1,l:'8–10 g/dL',c:'G2'},{g:2,l:'< 8 g/dL',c:'G3'}]},
+  {k:'plaq',   n:'Plaquetas',   gs:[{g:0,l:'> 100k',c:'G0'},{g:1,l:'50–100k',c:'G2'},{g:2,l:'< 50k',c:'G3'}]},
+  {k:'ureia',  n:'Ureia',       gs:[{g:0,l:'≤ 60',c:'G0'},{g:1,l:'60–100',c:'G2'},{g:2,l:'> 100',c:'G3'}]},
+  {k:'creat',  n:'Creatinina',  gs:[{g:0,l:'≤ 1,5',c:'G0'},{g:1,l:'1,5–2,0',c:'G2'},{g:2,l:'> 2,0',c:'G3'}]},
+  {k:'calcio', n:'Cálcio',      gs:[{g:0,l:'≤ 11',c:'G0'},{g:1,l:'11–13',c:'G2'},{g:2,l:'> 13',c:'G3'}]},
+  {k:'sodio',  n:'Sódio',       gs:[{g:0,l:'≤ 145',c:'G0'},{g:1,l:'145–150',c:'G2'},{g:2,l:'> 150',c:'G3'}]},
+  {k:'potassio',n:'Potássio',   gs:[{g:0,l:'≤ 5,5',c:'G0'},{g:1,l:'5,5–6,5',c:'G2'},{g:2,l:'> 6,5',c:'G3'}]},
+  {k:'tgo',    n:'TGO (AST)',   gs:[{g:0,l:'≤ 60',c:'G0'},{g:1,l:'60–120',c:'G2'},{g:2,l:'> 120',c:'G3'}]},
+  {k:'tgp',    n:'TGP (ALT)',   gs:[{g:0,l:'≤ 60',c:'G0'},{g:1,l:'60–120',c:'G2'},{g:2,l:'> 120',c:'G3'}]},
+  {k:'falc',   n:'FA',          gs:[{g:0,l:'≤ 150',c:'G0'},{g:1,l:'150–300',c:'G2'},{g:2,l:'> 300',c:'G3'}]},
+  {k:'ggt',    n:'Gama-GT',     gs:[{g:0,l:'≤ 60',c:'G0'},{g:1,l:'60–150',c:'G2'},{g:2,l:'> 150',c:'G3'}]},
+];
+
+var ALARMES = [
+  {k:'_negaRiscos',icon:'✅', text:'NEGA sinais de alarme',           sub:'Paciente sem nenhum sinal de risco', isNega:true},
+  {k:'febre',      icon:'🌡️', text:'Febre ≥ 38°C',                   sub:'Com ou sem calafrios'},
+  {k:'calafrios',  icon:'🥶', text:'Febre com calafrios intensos',     sub:'Bacteremia / neutropenia febril'},
+  {k:'cateter',    icon:'🔴', text:'Hiperemia / dor / secreção no cateter', sub:'Possível infecção'},
+  {k:'tosse',      icon:'😮', text:'Tosse com catarro purulento',      sub:'Pneumonia / infecção respiratória'},
+  {k:'urina',      icon:'🚽', text:'Urina fétida e disúria',           sub:'Possível ITU'},
+  {k:'escara',     icon:'🩹', text:'Escara ou celulite',               sub:'Vermelhidão, calor, edema'},
+  {k:'faringite',  icon:'🦷', text:'Faringite e odinofagia',           sub:'Dor intensa ao engolir'},
+  {k:'disenteria', icon:'🦠', text:'Diarreia com cólica e odor fétido',sub:'Possível C. difficile'},
+  {k:'mucosite',   icon:'👄', text:'Mucosite intensa (G3/G4)',         sub:'Incapaz de se alimentar'},
+  {k:'sangramento',icon:'🩸', text:'Sangramento ativo',                sub:'Qualquer sítio'},
+  {k:'dispneia',   icon:'😮‍💨',text:'Falta de ar em repouso',          sub:'SpO₂ baixa'},
+  {k:'dorToracica',icon:'💔', text:'Dor torácica ou aperto no peito',  sub:'Avaliar evento cardiopulmonar'},
+  {k:'queda',      icon:'🧍', text:'Queda, síncope ou tontura intensa', sub:'Risco neurológico/hemodinâmico'},
+  {k:'extravasamento',icon:'💧',text:'Dor, edema ou ardor no acesso',  sub:'Suspeita de extravasamento'},
+  {k:'reacaoInfusional',icon:'⚡',text:'Reação durante infusão',        sub:'Calor, tremor, broncoespasmo, hipotensão'},
+  {k:'convulsao',  icon:'🧠', text:'Convulsão ou rebaixamento',        sub:'Avaliação imediata'},
+  {k:'dorIntensa', icon:'🚑', text:'Dor intensa mal controlada',       sub:'Dor refratária ou progressiva'},
+  {k:'confusao',   icon:'😵', text:'Confusão mental',                  sub:'Desorientação'},
+];
+
+var tSel = {}, lSel = {}, alarmeSel = {}, tDias = {};
+TOX.forEach(function(t){ tSel[t.k] = null; tDias[t.k] = null; });
+LAB.forEach(function(l){ lSel[l.k] = null; });
+ALARMES.forEach(function(a){ alarmeSel[a.k] = false; });
+
+
+// ════════════════════════════════
+// DATA DO EXAME LABORATORIAL
+// ════════════════════════════════
+function updateLabDateInfo() {
+  var inp = document.getElementById('labDate');
+  var info = document.getElementById('labDateInfo');
+  if (!inp || !info) return;
+  var val = inp.value;
+  if (!val) { info.textContent = '—'; info.className = 'lab-date-info'; return; }
+  var d = new Date(val + 'T00:00:00');
+  var now = new Date();
+  now.setHours(0,0,0,0);
+  var diffMs = now - d;
+  var diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    info.textContent = 'Data futura?';
+    info.className = 'lab-date-info veryold';
+  } else if (diffDays === 0) {
+    info.textContent = 'Realizado HOJE';
+    info.className = 'lab-date-info';
+  } else if (diffDays === 1) {
+    info.textContent = 'Realizado há 1 dia';
+    info.className = 'lab-date-info';
+  } else if (diffDays <= 7) {
+    info.textContent = 'Realizado há ' + diffDays + ' dias';
+    info.className = 'lab-date-info';
+  } else if (diffDays <= 30) {
+    info.textContent = 'Realizado há ' + diffDays + ' dias';
+    info.className = 'lab-date-info old';
+  } else {
+    info.textContent = 'Realizado há ' + diffDays + ' dias ⚠️';
+    info.className = 'lab-date-info veryold';
+  }
+  buildResumo();
+}
+
+function getLabDaysAgo() {
+  var inp = document.getElementById('labDate');
+  if (!inp || !inp.value) return null;
+  var d = new Date(inp.value + 'T00:00:00');
+  var now = new Date();
+  now.setHours(0,0,0,0);
+  return Math.floor((now - d) / (1000 * 60 * 60 * 24));
+}
+
+function getLabDateText() {
+  var days = getLabDaysAgo();
+  if (days === null) return '';
+  if (days === 0) return 'Realizado HOJE';
+  if (days === 1) return 'Realizado há 1 dia';
+  return 'Realizado há ' + days + ' dias';
+}
+
+// ════════════════════════════════
+// HELPERS
+// ════════════════════════════════
+function v(id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; }
+function getPa() {
+  var s = v('pa_sis'), d = v('pa_dia');
+  if (s && d) return s + '/' + d;
+  if (s) return s;
+  return '';
+}
+function pad(s, n) { while (s.length < n) s += ' '; return s; }
+function formatElapsed() {
+  var ms = new Date() - consultStart;
+  var mins = Math.floor(ms / 60000);
+  var secs = Math.floor((ms % 60000) / 1000);
+  return (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+}
+function updateTimer() {
+  var t = document.getElementById('hdrTimer');
+  if (t) t.textContent = formatElapsed();
+}
+
+// ════════════════════════════════
+// RENDER PROTOCOLOS
+// ════════════════════════════════
+function renderProtos() {
+  var html = '';
+  PROTOCOLOS.forEach(function(p, i) {
+    var label = p.name === 'Outro' ? 'Outro →' : p.name;
+    html += '<div class="proto-pill" data-i="' + i + '" onclick="pickProto(' + i + ',this)">' + label + '</div>';
+  });
+  document.getElementById('protoRow').innerHTML = html;
+}
+
+function pickProto(idx, el) {
+  var p = PROTOCOLOS[idx];
+  if (p.name === 'Outro') {
+    document.getElementById('protoInputRow').style.display = 'flex';
+    document.querySelectorAll('.proto-pill').forEach(function(b){ b.classList.remove('on'); });
+    el.classList.add('on');
+    protoVal = document.getElementById('protoCustom').value.trim();
+    protoIsPoly = false;
+    autoConduta(); buildResumo();
+    return;
+  }
+  document.getElementById('protoInputRow').style.display = 'none';
+  document.getElementById('protoCustom').value = '';
+  var wasOn = el.classList.contains('on');
+  document.querySelectorAll('.proto-pill').forEach(function(b){ b.classList.remove('on'); });
+  if (!wasOn) {
+    el.classList.add('on');
+    protoVal = p.name;
+    protoIsPoly = p.poly;
+  } else {
+    protoVal = '';
+    protoIsPoly = false;
+  }
+  autoConduta(); buildResumo();
+}
+
+// ════════════════════════════════
+// RENDER TOX / LAB / ALARMES
+// ════════════════════════════════
+function gcTox(item, g) {
+  if (item.k === 'diurese') return g.g === 0 ? 'G0' : g.g === 1 ? 'G1' : 'G2';
+  return 'G' + g.g;
+}
+function renderTox() {
+  var html = '';
+  TOX.forEach(function(t) {
+    var btns = '';
+    t.gs.forEach(function(g) {
+      var cls = gcTox(t, g);
+      var on = tSel[t.k] === g.g ? ' on' : '';
+      btns += '<button class="gb ' + cls + on + '" onclick="pickT(\'' + t.k + '\',' + g.g + ',this)">' + g.l + '</button>';
+    });
+    // Dias selector (only if dias=true and grade >= 1)
+    var diasHtml = '';
+    if (t.dias && tSel[t.k] !== null && tSel[t.k] >= 1) {
+      var d1on = tDias[t.k] === 1 ? ' on' : '';
+      var d2on = tDias[t.k] === 2 ? ' on' : '';
+      var d3on = tDias[t.k] === 3 ? ' on' : '';
+      diasHtml = '<div class="dias-group" id="DG_' + t.k + '">'
+        + '<button type="button" class="dias-btn' + d1on + '" onclick="pickDias(\'' + t.k + '\',1)">1 dia</button>'
+        + '<button type="button" class="dias-btn' + d2on + '" onclick="pickDias(\'' + t.k + '\',2)">2–5 d</button>'
+        + '<button type="button" class="dias-btn' + d3on + '" onclick="pickDias(\'' + t.k + '\',3)">&gt;5 d</button>'
+        + '</div>';
+    }
+    html += '<div class="tox-row"><div class="tox-name">' + t.n + '</div><div class="tox-btns" id="TB_' + t.k + '">' + btns + diasHtml + '</div></div>';
+  });
+  document.getElementById('toxList').innerHTML = html;
+}
+
+function pickDias(k, d) {
+  tDias[k] = tDias[k] === d ? null : d;
+  // Re-renderiza para garantir estado visual correto
+  renderTox();
+  autoConduta();
+  buildResumo();
+}
+function renderLab() {
+  var html = '';
+  LAB.forEach(function(l) {
+    var btns = '';
+    l.gs.forEach(function(g) {
+      var on = lSel[l.k] === g.g ? ' on' : '';
+      btns += '<button class="gb ' + g.c + on + '" style="width:100%;justify-content:center" onclick="pickL(\'' + l.k + '\',' + g.g + ',this)">' + g.l + '</button>';
+    });
+    html += '<div class="lab-card"><div class="lab-card-hdr">' + l.n + '</div><div class="lab-card-body" id="LB_' + l.k + '">' + btns + '</div></div>';
+  });
+  document.getElementById('labGrid').innerHTML = html;
+}
+function renderAlarmes() {
+  var html = '';
+  ALARMES.forEach(function(a) {
+    var on = alarmeSel[a.k] ? ' on' : '';
+    var negaClass = a.isNega ? ' nega' : '';
+    html += '<div class="alarme-item' + negaClass + on + '" onclick="toggleAlarme(\'' + a.k + '\',this)">'
+          + '<span class="alarme-item-icon">' + a.icon + '</span>'
+          + '<div><div class="alarme-item-text">' + a.text + '</div>'
+          + '<div class="alarme-sub">' + a.sub + '</div></div></div>';
+  });
+  document.getElementById('alarmeBody').innerHTML = html;
+}
+function pickT(k, g, el) {
+  tSel[k] = tSel[k] === g ? null : g;
+  if (tSel[k] === null) tDias[k] = null;
+  // Se marcou qualquer grau, desativa "Nega sintomas"
+  if (tSel[k] !== null && negaSintomas) {
+    negaSintomas = false;
+    var box = document.getElementById('negaSintomasBox');
+    if (box) {
+      box.style.background = '#F0FDF4';
+      box.style.borderColor = '#86EFAC';
+      box.querySelector('div').firstElementChild.style.color = '#15803D';
+      var subdiv = box.querySelectorAll('div div')[1];
+      if (subdiv) subdiv.style.color = '#166534';
+    }
+  }
+  renderTox();
+  autoConduta(); buildResumo();
+}
+function pickL(k, g, el) {
+  lSel[k] = lSel[k] === g ? null : g;
+  var w = document.getElementById('LB_' + k);
+  if (w) w.querySelectorAll('.gb').forEach(function(b){ b.classList.remove('on'); });
+  if (lSel[k] !== null) el.classList.add('on');
+  autoConduta(); buildResumo();
+}
+function toggleAlarme(k, el) {
+  if (k === '_negaRiscos') {
+    // Se está ativando "nega", desmarcar todos os outros alarmes
+    var newVal = !alarmeSel[k];
+    if (newVal) {
+      ALARMES.forEach(function(a){
+        if (a.k !== '_negaRiscos') alarmeSel[a.k] = false;
+      });
+    }
+    alarmeSel[k] = newVal;
+  } else {
+    // Se está marcando um alarme real, desmarcar "nega"
+    alarmeSel[k] = !alarmeSel[k];
+    if (alarmeSel[k]) alarmeSel._negaRiscos = false;
+  }
+  renderAlarmes();
+  autoConduta(); buildResumo(); buildLabDoc();
+}
+function setAtb(val) {
+  atbUso = atbUso === val ? null : val;
+  var sim = document.getElementById('atbSim');
+  var nao = document.getElementById('atbNao');
+  sim.classList.remove('on-sim');
+  nao.classList.remove('on-nao');
+  if (atbUso === true) sim.classList.add('on-sim');
+  else if (atbUso === false) nao.classList.add('on-nao');
+  autoConduta(); buildResumo();
+}
+
+function setInternacao(val) {
+  internacaoVal = internacaoVal === val ? null : val;
+  ['intNega','intMenor7','intMaior7'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) { el.classList.remove('on-sim'); el.classList.remove('on-nao'); }
+  });
+  if (internacaoVal === 0) document.getElementById('intNega').classList.add('on-nao');
+  else if (internacaoVal === 1) document.getElementById('intMenor7').classList.add('on-sim');
+  else if (internacaoVal === 2) document.getElementById('intMaior7').classList.add('on-sim');
+  autoConduta(); buildResumo();
+}
+function pickEcog(val, el) {
+  ecogVal = ecogVal === val ? null : val;
+  document.querySelectorAll('.ecog-item').forEach(function(e){ e.classList.remove('on'); });
+  if (ecogVal !== null) el.classList.add('on');
+  autoConduta(); buildResumo();
+}
+
+// ════════════════════════════════
+// CONDUTA AUTOMÁTICA
+// ════════════════════════════════
+function autoConduta() {
+  var adiar = [], refer = [], orientacoes = [];
+
+  var idade = parseInt(v('idade')) || 0;
+  var idadeAlta = idade > 72;
+  var ecogAlto = ecogVal !== null && ecogVal >= 2;
+
+  // ─── Data do exame laboratorial ───
+  var labDays = getLabDaysAgo();
+  var examRecente = labDays !== null && labDays <= 4;
+  var examAntigo  = labDays !== null && labDays >= 5;
+
+  // ─── NEUTRÓFILOS ───
+  if (lSel.neutro === 2) adiar.push('Neutrófilos < 1000');
+  else if (lSel.neutro === 1) {
+    if (examAntigo) refer.push('Neutrófilos 1000–1500 (exame há ' + labDays + ' dias)');
+    else if (examRecente) adiar.push('Neutrófilos < 1500 (exame ≤4 dias)');
+    else adiar.push('Neutrófilos < 1500');
+  }
+
+  // ─── HEMOGLOBINA ───
+  if (lSel.hb === 2) {
+    if (examAntigo) refer.push('Hb < 8 (exame antigo)');
+    else adiar.push('Hb < 8 g/dL');
+  } else if (lSel.hb === 1) refer.push('Hb 8–10 g/dL');
+
+  // ─── PLAQUETAS ───
+  if (lSel.plaq === 2) adiar.push('Plaquetas < 50.000');
+  else if (lSel.plaq === 1) {
+    if (examAntigo) refer.push('Plaquetas 50–100k (exame há ' + labDays + ' dias)');
+    else if (examRecente) adiar.push('Plaquetas < 100k (exame ≤4 dias)');
+    else adiar.push('Plaquetas < 100k');
+  }
+
+  // ─── FUNÇÃO RENAL ───
+  if (lSel.ureia === 2) adiar.push('Ureia > 100');
+  else if (lSel.ureia === 1) refer.push('Ureia 60–100');
+  if (lSel.creat === 2) adiar.push('Creatinina > 2,0');
+  else if (lSel.creat === 1) refer.push('Creatinina 1,5–2,0');
+
+  // ─── HEPÁTICAS ───
+  if (lSel.tgo === 2 || lSel.tgp === 2) adiar.push('Transaminases > 120');
+  else if (lSel.tgo === 1 || lSel.tgp === 1) refer.push('Transaminases 60–120');
+  if (lSel.falc === 2) adiar.push('FA > 300');
+  else if (lSel.falc === 1) refer.push('FA 150–300');
+  if (lSel.ggt === 2) refer.push('Gama-GT > 150');
+  else if (lSel.ggt === 1) refer.push('Gama-GT 60–150');
+
+  // ─── ELETRÓLITOS ───
+  if (lSel.calcio === 2) adiar.push('Cálcio > 13');
+  else if (lSel.calcio === 1) refer.push('Cálcio 11–13');
+  if (lSel.sodio === 2) adiar.push('Sódio > 150');
+  else if (lSel.sodio === 1) refer.push('Sódio 145–150');
+  if (lSel.potassio === 2) adiar.push('Potássio > 6,5');
+  else if (lSel.potassio === 1) refer.push('Potássio 5,5–6,5');
+
+  if (labDays !== null && labDays > 30) refer.push('Exame há ' + labDays + ' dias — repetir');
+
+  // ─── TOXICIDADE CTCAE ───
+  TOX.forEach(function(t) {
+    var g = tSel[t.k];
+    if (g === null) return;
+    var dias = tDias[t.k];
+
+    if (t.k === 'diurese') {
+      if (g === 1) refer.push('Diurese aumentada');
+      else if (g === 2) refer.push('Diurese reduzida');
+      return;
+    }
+
+    if (g >= 3) {
+      if (t.k === 'nausea')   { refer.push('Náusea CTCAE G3'); return; }
+      if (t.k === 'diarreia') { refer.push('Diarreia CTCAE G3'); return; }
+      if (t.k === 'apetite')  { refer.push('Falta de apetite severa'); return; }
+      adiar.push(t.n + ' CTCAE G' + g);
+      return;
+    }
+
+    if (g === 2) {
+      if (t.k === 'edema' || t.k === 'artromialgia') return;
+      if (t.k === 'neuropatia') { refer.push('Neuropatia G2'); return; }
+      if (t.k === 'diarreia' && dias === 3) { refer.push('Diarreia G2 > 5 dias'); return; }
+      if (t.k === 'vomito' && (dias === 2 || dias === 3)) { refer.push('Vômito G2 > 3 dias'); return; }
+      if (idadeAlta || ecogAlto) refer.push(t.n + ' G2 (idade > 72 / ECOG ≥ 2)');
+    }
+  });
+
+  // ─── INTERNAÇÃO ───
+  if (internacaoVal === 2) adiar.push('Internação ≥ 7 dias');
+  else if (internacaoVal === 1) refer.push('Internação < 7 dias');
+
+  // ─── ECOG ───
+  if (ecogVal !== null && ecogVal >= 3) adiar.push('ECOG ' + ecogVal);
+  else if (ecogVal === 2) refer.push('ECOG ≥ 2');
+
+  // ─── IDADE ───
+  if (idade > 72) refer.push('Idade > 72 anos');
+
+  // ─── ATB ───
+  if (atbUso === true) refer.push('Uso recente de antibiótico');
+
+  // ─── ALARMES ───
+  var selAlarmes = getSelectedAlarmes();
+  selAlarmes.forEach(function(a){ refer.push(a.text); });
+
+  // ═══════════════════════════════════════════════
+  // ORIENTAÇÕES TERAPÊUTICAS — MEDICAÇÕES A EVITAR
+  // Cruza com med. de uso contínuo do paciente
+  // ═══════════════════════════════════════════════
+  var medCont = v('medCont').toLowerCase();
+  function temMed(termos) {
+    if (!medCont) return false;
+    for (var i = 0; i < termos.length; i++) {
+      if (medCont.indexOf(termos[i]) >= 0) return true;
+    }
+    return false;
+  }
+
+  // FEBRE
+  if (tSel.febre !== null && tSel.febre >= 1) {
+    orientacoes.push('🌡️ FEBRE — Não automedicar dipirona, paracetamol, AAS, ibuprofeno antes da avaliação médica (mascara infecção).');
+    if (temMed(['dipirona','paracetamol','aas','aspirina','ibuprofeno','nimesulida'])) {
+      orientacoes.push('⚠️ ATENÇÃO: paciente em uso de antitérmico/AINE — suspender e avisar médico imediatamente.');
+    }
+  }
+
+  // PLAQUETOPENIA / SANGRAMENTO
+  if (lSel.plaq === 1 || lSel.plaq === 2 || alarmeSel.sangramento) {
+    if (temMed(['aas','aspirina','clopidogrel','ácido acetilsalicílico'])) {
+      orientacoes.push('🩸 SUSPENDER AAS / Clopidogrel — paciente apresenta plaquetopenia ou sangramento ativo.');
+    }
+    if (temMed(['varfarina','warfarina','marevan','rivaroxabana','apixabana','xarelto','eliquis','dabigatrana','pradaxa'])) {
+      orientacoes.push('🩸 SUSPENDER anticoagulante oral — discutir com médico imediatamente.');
+    }
+    if (temMed(['ibuprofeno','diclofenaco','nimesulida','naproxeno','cetoprofeno','piroxicam'])) {
+      orientacoes.push('🩸 SUSPENDER AINE — risco de sangramento.');
+    }
+    if (!temMed(['aas','aspirina','clopidogrel','varfarina','warfarina','ibuprofeno','diclofenaco','nimesulida'])) {
+      orientacoes.push('🩸 PLAQUETOPENIA/SANGRAMENTO — Suspender qualquer AAS, Clopidogrel, AINEs ou anticoagulantes.');
+    }
+  }
+
+  // NEUTROPENIA
+  if (lSel.neutro === 1 || lSel.neutro === 2) {
+    orientacoes.push('🦠 NEUTROPENIA — Evitar via retal (supositórios, enemas, termômetro retal). Risco de bacteremia.');
+  }
+
+  // DIARREIA
+  if (tSel.diarreia !== null && tSel.diarreia >= 1) {
+    orientacoes.push('💧 DIARREIA — Suspender laxativos (lactulose, óleo mineral, bisacodil, sene). Evitar metoclopramida e domperidona.');
+    if (temMed(['losartana','valsartana','olmesartana','captopril','enalapril','ramipril','lisinopril'])) {
+      var med = '';
+      ['losartana','valsartana','olmesartana','captopril','enalapril','ramipril','lisinopril'].forEach(function(m){
+        if (medCont.indexOf(m) >= 0) med += (med ? ', ' : '') + m.charAt(0).toUpperCase() + m.slice(1);
+      });
+      orientacoes.push('💧 SUSPENDER ' + med + ' — paciente com diarreia (risco hipotensão / LRA).');
+    } else if (temMed(['hidroclorotiazida','furosemida','indapamida','espironolactona'])) {
+      orientacoes.push('💧 SUSPENDER diurético — paciente com diarreia (risco desidratação).');
+    } else {
+      orientacoes.push('💧 Suspender anti-hipertensivos temporariamente (risco hipotensão / LRA).');
+    }
+  }
+
+  // MUCOSITE
+  if (tSel.mucosite !== null && tSel.mucosite >= 1) {
+    orientacoes.push('👄 MUCOSITE — Evitar enxaguantes com álcool, peróxido, bicarbonato concentrado, sucralfato.');
+  }
+
+  // NÁUSEAS/VÔMITOS + risco QT
+  if ((tSel.nausea !== null && tSel.nausea >= 2) || (tSel.vomito !== null && tSel.vomito >= 2)) {
+    if (lSel.potassio !== 0 && lSel.potassio !== null || lSel.calcio !== 0 && lSel.calcio !== null) {
+      orientacoes.push('💊 NÁUSEAS/VÔMITOS + distúrbio eletrolítico — Cautela com ondansetrona alta dose, domperidona, haloperidol (risco de QT longo).');
+    }
+  }
+
+  // DESIDRATAÇÃO / LRA
+  if ((tSel.vomito !== null && tSel.vomito >= 2) || (tSel.diarreia !== null && tSel.diarreia >= 2) ||
+      lSel.ureia === 2 || lSel.creat === 2 || tSel.diurese === 2) {
+    orientacoes.push('🚱 DESIDRATAÇÃO/LRA — Evitar AINEs, IECA, BRA, diuréticos. Cautela com metformina, contraste iodado e aminoglicosídeos.');
+    if (temMed(['metformina','glifage','dimefor'])) {
+      orientacoes.push('🚱 SUSPENDER metformina — risco de acidose láctica em LRA.');
+    }
+  }
+
+  // FALTA DE APETITE SEVERA
+  if (tSel.apetite === 3) {
+    orientacoes.push('🍽️ FALTA DE APETITE SEVERA — Suspender hipoglicemiantes (risco hipoglicemia grave).');
+    if (temMed(['glibenclamida','glimepirida','glicazida','gliclazida','metformina','insulina','daonil','amaryl','diamicron'])) {
+      var hipo = '';
+      ['glibenclamida','glimepirida','glicazida','gliclazida','metformina','insulina'].forEach(function(m){
+        if (medCont.indexOf(m) >= 0) hipo += (hipo ? ', ' : '') + m.charAt(0).toUpperCase() + m.slice(1);
+      });
+      orientacoes.push('🍽️ SUSPENDER ' + hipo + ' — risco de hipoglicemia grave.');
+    }
+  }
+
+  // HEPATOPATIA
+  if (lSel.tgo === 2 || lSel.tgp === 2 || lSel.falc === 2 || lSel.ggt === 2) {
+    orientacoes.push('🟡 HEPATOPATIA — Revisar todas as medicações com metabolismo hepático. Suspender paracetamol e estatinas.');
+    if (temMed(['paracetamol','sinvastatina','atorvastatina','rosuvastatina','pravastatina'])) {
+      orientacoes.push('🟡 SUSPENDER paracetamol / estatina — alteração hepática.');
+    }
+  }
+
+  // HIPERCALCEMIA
+  if (lSel.calcio === 1 || lSel.calcio === 2) {
+    if (temMed(['hidroclorotiazida','clortalidona','indapamida'])) {
+      orientacoes.push('🦴 HIPERCALCEMIA — SUSPENDER diurético tiazídico (eleva cálcio).');
+    }
+  }
+
+  // HIPERCALEMIA
+  if (lSel.potassio === 1 || lSel.potassio === 2) {
+    if (temMed(['espironolactona','aldactone','losartana','enalapril','captopril','ramipril'])) {
+      orientacoes.push('⚡ HIPERCALEMIA — SUSPENDER espironolactona / IECA / BRA (poupadores de potássio).');
+    }
+  }
+
+  // ─── EXIBIR PAINEL ───
+  var wrap = document.getElementById('conductaWrap');
+  var hasAny = Object.keys(tSel).some(function(k){ return tSel[k] !== null; }) ||
+               Object.keys(lSel).some(function(k){ return lSel[k] !== null; }) ||
+               ecogVal !== null || selAlarmes.length > 0 || atbUso !== null || internacaoVal !== null || alarmeSel._negaRiscos;
+
+  if (!hasAny && !protoVal && idade === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  var box = document.getElementById('conductaBox');
+  var icon = document.getElementById('conductaIcon');
+  var ttl = document.getElementById('conductaTitle');
+  var rsn = document.getElementById('conductaReason');
+
+  // Constrói reason incluindo orientações específicas como parte da decisão
+  // ═══ Monta bullets com prosa redacional ═══
+  var bullets = [];
+
+  if (adiar.length > 0) {
+    var cr = adiar.slice(0, 6).join(', ').toLowerCase();
+    bullets.push({
+      titulo: 'Critérios para adiar',
+      texto: 'Quimioterapia deve ser adiada nesta consulta. Foram identificados ' + adiar.length + ' critérios de bloqueio: ' + cr + '. Comunicar o oncologista responsável antes de qualquer conduta.'
+    });
+  } else if (refer.length > 0) {
+    var rr = refer.slice(0, 6).join(', ').toLowerCase();
+    bullets.push({
+      titulo: 'Motivo da referência',
+      texto: 'Paciente apresenta achados que exigem reavaliação médica antes da liberação: ' + rr + '. Comunicar ao oncologista para definição da conduta.'
+    });
+  } else {
+    bullets.push({
+      titulo: 'Avaliação clínica',
+      texto: 'Paciente apto para receber a quimioterapia. Parâmetros clínicos e laboratoriais dentro dos limites aceitáveis para o ciclo proposto.'
+    });
+  }
+
+  // Orientações terapêuticas como bullets individuais
+  orientacoes.forEach(function(o){
+    // Parse: "🔸 TÍTULO — texto" → separa título e texto
+    var parts = o.split(' — ');
+    if (parts.length >= 2) {
+      bullets.push({ titulo: parts[0].replace(/[🌡️🩸🦠💧👄💊🚱🍽️🟡🦴⚡⚠️]/g, '').trim(), texto: parts.slice(1).join(' — ') });
+    } else {
+      // Fallback — tenta separar pelos dois pontos
+      var idx = o.indexOf(':');
+      if (idx > 0 && idx < 40) {
+        bullets.push({ titulo: o.substring(0, idx).replace(/[🌡️🩸🦠💧👄💊🚱🍽️🟡🦴⚡⚠️]/g, '').trim(), texto: o.substring(idx + 1).trim() });
+      } else {
+        bullets.push({ titulo: 'Atenção', texto: o.replace(/[🌡️🩸🦠💧👄💊🚱🍽️🟡🦴⚡⚠️]/g, '').trim() });
+      }
+    }
+  });
+
+  var bulletHtml = bullets.map(function(b){
+    return '<div style="margin-bottom:6px;line-height:1.5"><span style="font-weight:800">• ' + b.titulo + ':</span> <span style="font-weight:400">' + b.texto + '</span></div>';
+  }).join('');
+
+  if (adiar.length > 0) {
+    box.className = 'conduta-box cond-adiar';
+    icon.textContent = '⏸️';
+    ttl.textContent = 'ADIAR QUIMIOTERAPIA — Comunicar ao médico';
+    rsn.innerHTML = bulletHtml;
+  } else if (refer.length > 0) {
+    box.className = 'conduta-box cond-medico';
+    icon.textContent = '👨‍⚕️';
+    ttl.textContent = 'REFERIR AO MÉDICO antes de liberar';
+    rsn.innerHTML = bulletHtml;
+  } else {
+    box.className = 'conduta-box cond-apto';
+    icon.textContent = '✅';
+    ttl.textContent = 'LIBERAR PARA QUIMIOTERAPIA';
+    rsn.innerHTML = bulletHtml;
+  }
+
+  window._orientacoesAtuais = orientacoes;
+}
+
+function toggleNegaSintomas() {
+  negaSintomas = !negaSintomas;
+  var box = document.getElementById('negaSintomasBox');
+  if (negaSintomas) {
+    // Limpa todos os CTCAE
+    TOX.forEach(function(t){ tSel[t.k] = null; tDias[t.k] = null; });
+    renderTox();
+    box.style.background = '#15803D';
+    box.style.borderColor = '#15803D';
+    box.querySelectorAll('div').forEach(function(d){ d.style.color = '#fff'; });
+  } else {
+    box.style.background = '#F0FDF4';
+    box.style.borderColor = '#86EFAC';
+    box.querySelector('div').firstElementChild.style.color = '#15803D';
+    var subdiv = box.querySelectorAll('div div')[1];
+    if (subdiv) subdiv.style.color = '#166534';
+  }
+  autoConduta(); buildResumo();
+}
+
+function getSelectedAlarmes() { return ALARMES.filter(function(a){ return alarmeSel[a.k] && !a.isNega; }); }
+
+function toggleGuide() {
+  var body = document.getElementById('gradeGuideBody');
+  if (body) body.classList.toggle('open');
+}
+
+function selectedToxicidades() {
+  var DIAS_LBL = {1:'1 dia', 2:'2-5 dias', 3:'> 5 dias'};
+  return TOX.map(function(t){
+    var g = tSel[t.k];
+    if (g === null) return null;
+    var opt = (t.gs || []).find(function(x){ return x.g === g; });
+    return {
+      chave: t.k,
+      nome: t.n,
+      grau: g,
+      descricao: opt ? opt.l : 'G' + g,
+      dias: tDias[t.k] ? DIAS_LBL[tDias[t.k]] : null,
+      relevante: g >= 2,
+      grave: g >= 3
+    };
+  }).filter(Boolean);
+}
+
+function selectedLaboratorio() {
+  return LAB.map(function(l){
+    var g = lSel[l.k];
+    if (g === null) return null;
+    var opt = (l.gs || []).find(function(x){ return x.g === g; });
+    return {
+      chave: l.k,
+      nome: l.n,
+      faixa: opt ? opt.l : 'G' + g,
+      grau: opt ? opt.c : 'G' + g,
+      alterado: g >= 1,
+      critico: g >= 2
+    };
+  }).filter(Boolean);
+}
+
+function getTriagemPayload() {
+  var INT_LBL = {0:'Nega',1:'Sim - < 7 dias',2:'Sim - >= 7 dias'};
+  return {
+    schema: 'triagem-qt-v17.1-preview',
+    origem: 'enfermagem',
+    geradoEm: new Date().toISOString(),
+    paciente: {
+      nome: v('nome') || null,
+      idade: v('idade') || null,
+      contadorLocal: patientCounter
+    },
+    tratamento: {
+      protocolo: protoVal || null,
+      poliquimioterapia: !!protoIsPoly,
+      ciclo: v('ciclo') || null
+    },
+    contexto: {
+      medicacoesUsoContinuo: v('medCont') || null,
+      internacaoRecente: internacaoVal !== null ? INT_LBL[internacaoVal] : null,
+      antibioticoRecente: atbUso === null ? null : atbUso ? 'Sim' : 'Não',
+      ecog: ecogVal
+    },
+    sinaisVitais: {
+      pa: getPa() || null,
+      spo2: v('spo2') || null,
+      fc: v('fc') || null
+    },
+    toxicidade: {
+      negaSintomas: !!negaSintomas,
+      itens: selectedToxicidades()
+    },
+    laboratorio: {
+      dataExame: getLabDateText() || null,
+      itens: selectedLaboratorio()
+    },
+    sinaisAlarme: getSelectedAlarmes().map(function(a){
+      return { chave: a.k, texto: a.text, detalhe: a.sub || null };
+    }),
+    conclusao: conclusao || null,
+    observacoes: v('obs') || null,
+    resumoTexto: (document.getElementById('resBody') || {}).textContent || ''
+  };
+}
+
+function updatePayloadPreview() {
+  var box = document.getElementById('payloadBody');
+  if (!box) return;
+  box.textContent = JSON.stringify(getTriagemPayload(), null, 2);
+}
+
+window.getTriagemPayload = getTriagemPayload;
+
+// ════════════════════════════════
+// NAVEGAÇÃO
+// ════════════════════════════════
+function goNext() {
+  if (curP === 0 && !v('nome').trim()) { alert('Informe o nome do paciente.'); return; }
+  if (curP === 2) { buildResumo(); showP(3); buildLabDoc(); buildRetDoc(); buildMedDoc(); return; }
+  if (curP < 3) showP(curP + 1);
+}
+function goBack() { if (curP > 0) showP(curP - 1); }
+function showP(n) {
+  for (var i = 0; i < 4; i++) {
+    var pg = document.getElementById('page' + i);
+    if (pg) pg.classList.remove('active');
+  }
+  curP = n;
+  var tgt = document.getElementById('page' + n);
+  if (tgt) tgt.classList.add('active');
+  if (n === 2) updateAlarmeResumo();
+  updSteps(); updNav();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function updNav() {
+  var bb = document.getElementById('btnBack');
+  var bn = document.getElementById('btnNext');
+  if (!bb || !bn) return;
+  bb.style.display = curP === 0 ? 'none' : '';
+  if (curP === 3) {
+    bn.style.display = 'none';
+  } else {
+    bn.style.display = '';
+    bn.textContent = curP === 2 ? '📄 Gerar Documentos →' : 'Prosseguir →';
+  }
+}
+function updSteps() {
+  for (var i = 0; i < 4; i++) {
+    var c = document.getElementById('sc' + i);
+    var l = document.getElementById('sl' + i);
+    c.className = 'step-c' + (i < curP ? ' done' : i === curP ? ' active' : '');
+    c.textContent = i < curP ? '✓' : (i + 1);
+    l.className = 'step-lbl' + (i < curP ? ' done' : i === curP ? ' active' : '');
+    if (i < 3) document.getElementById('cn' + i).className = 'conn' + (i < curP ? ' done' : '');
+  }
+}
+function updateAlarmeResumo() {
+  var sel = getSelectedAlarmes();
+  var wrap = document.getElementById('alarmeResumo');
+  var list = document.getElementById('alarmeResumoList');
+  if (sel.length === 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  list.innerHTML = sel.map(function(a){
+    return '<div class="alarme-resumo-item"><span>' + a.icon + '</span><span>' + a.text + '</span></div>';
+  }).join('');
+}
+
+// ════════════════════════════════
+// CONCLUSÃO
+// ════════════════════════════════
+var CLBL = { apto:'✅ APTO PARA QUIMIOTERAPIA', medico:'👨‍⚕️ REFERÊNCIA AO MÉDICO', adiar:'⏸️ ADIAR QUIMIOTERAPIA' };
+function setConc(k, el) {
+  conclusao = conclusao === k ? null : k;
+  document.querySelectorAll('.cbtn').forEach(function(b){ b.classList.remove('on'); });
+  if (conclusao) el.classList.add('on');
+  buildResumo();
+}
+
+// ════════════════════════════════
+// RESUMO
+// ════════════════════════════════
+var TLBL = {0:'G0 Ausente',1:'G1 Leve',2:'G2 Moderada',3:'G3 Grave',4:'G4 Risco'};
+var TLBL_INT = {0:'Nega',1:'Sim — < 7 dias',2:'Sim — ≥ 7 dias'};
+var LLBL = {
+  neutro:  {0:'> 1500',1:'1000–1500',2:'< 1000'},
+  hb:      {0:'> 10 g/dL',1:'8–10 g/dL',2:'< 8 g/dL'},
+  plaq:    {0:'> 100k',1:'50–100k',2:'< 50k'},
+  ureia:   {0:'≤ 60',1:'60–100',2:'> 100'},
+  creat:   {0:'≤ 1,5',1:'1,5–2,0',2:'> 2,0'},
+  calcio:  {0:'≤ 11',1:'11–13',2:'> 13'},
+  sodio:   {0:'≤ 145',1:'145–150',2:'> 150'},
+  potassio:{0:'≤ 5,5',1:'5,5–6,5',2:'> 6,5'},
+  tgo:     {0:'≤ 60',1:'60–120',2:'> 120'},
+  tgp:     {0:'≤ 60',1:'60–120',2:'> 120'},
+  falc:    {0:'≤ 150',1:'150–300',2:'> 300'},
+  ggt:     {0:'≤ 60',1:'60–150',2:'> 150'},
+};
+var ECOG_LBL = {
+  0:'ECOG 0 — Totalmente ativo',
+  1:'ECOG 1 — Atividades leves',
+  2:'ECOG 2 — Ambulatório < 50% no leito',
+  3:'ECOG 3 — > 50% no leito',
+  4:'ECOG 4 — Restrito ao leito',
+};
+
+function buildResumo() {
+  var now = new Date();
+  var dt = now.toLocaleDateString('pt-BR');
+  var hr = now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  var S = '─'.repeat(44), S2 = '═'.repeat(44);
+  var nome = v('nome') || '—';
+  var idStr = v('idade') ? v('idade') + ' anos' : '—';
+  var atbStr = atbUso === true ? 'Sim' : atbUso === false ? 'Não' : '—';
+
+  var r = 'TRIAGEM DE QUIMIOTERAPIA — ENFERMAGEM\nHospital do Bem · Patos-PB\n' + dt + ' às ' + hr + '\nPaciente ' + patientCounter + ' · Tempo: ' + formatElapsed() + '\n' + S2 + '\n\n';
+  var cicloStr = v('ciclo') ? 'Ciclo ' + v('ciclo') : '—';
+  r += 'PACIENTE\n' + S + '\n';
+  r += 'Nome     : ' + nome + '\n';
+  r += 'Idade    : ' + idStr + '\n';
+  r += 'Protocolo: ' + (protoVal || '—') + (protoIsPoly ? ' (poliquimio)' : '') + '\n';
+  r += 'Ciclo    : ' + cicloStr + '\n';
+  r += 'ECOG     : ' + (ecogVal !== null ? ECOG_LBL[ecogVal] : '—') + '\n';
+  r += 'ATB rec. : ' + atbStr + '\n';
+  var medCont = v('medCont');
+  if (medCont) r += 'Med. uso : ' + medCont.replace(/\n/g, '; ') + '\n';
+  r += '\n';
+  r += 'SINAIS VITAIS\n' + S + '\n';
+  r += 'PA: ' + (getPa() || '—') + ' mmHg  |  SpO₂: ' + (v('spo2') || '—') + ' %  |  FC: ' + (v('fc') || '—') + ' bpm\n\n';
+  var DIAS_LBL = {1:' (1 dia)', 2:' (2–5 dias)', 3:' (> 5 dias)'};
+  // Internação como item separado
+  var INT_LBL = {0:'Nega',1:'Sim — < 7 dias',2:'Sim — ≥ 7 dias'};
+  var DIUR_LBL = {0:'Normal',1:'Aumentada',2:'Reduzida'};
+  r += 'INTERNAÇÃO RECENTE\n' + S + '\n';
+  if (internacaoVal !== null) r += INT_LBL[internacaoVal] + '\n\n';
+  else r += 'Não referida\n\n';
+  r += 'TOXICIDADE (CTCAE v5.0)\n' + S + '\n';
+  if (negaSintomas) {
+    r += '✅ Paciente NEGA sintomas ou efeitos colaterais.\n';
+  } else {
+    // Lista apenas os itens marcados — omite "Não avaliado"
+    var algumTox = false;
+    TOX.forEach(function(t) {
+      var g = tSel[t.k];
+      if (g === null) return;
+      var lbl;
+      if (t.k === 'diurese') lbl = DIUR_LBL[g] || 'G' + g;
+      else lbl = TLBL[g] || 'G' + g;
+      var diasInfo = (t.dias && g >= 1 && tDias[t.k]) ? DIAS_LBL[tDias[t.k]] : '';
+      var flag = g >= 3 ? ' ⚠️' : g >= 2 ? ' ⚡' : '';
+      r += pad(t.n, 17) + ': ' + lbl + diasInfo + flag + '\n';
+      algumTox = true;
+    });
+    if (!algumTox) r += 'Sem alterações registradas\n';
+  }
+  r += '\nLABORATÓRIO\n' + S + '\n';
+  var labDateTxt = getLabDateText();
+  if (labDateTxt) r += 'Data exame       : ' + labDateTxt + '\n';
+  var algumLab = false;
+  LAB.forEach(function(l) {
+    var g = lSel[l.k];
+    if (g === null) return;
+    var lbl = LLBL[l.k][g] || 'G' + g;
+    r += pad(l.n, 17) + ': ' + lbl + (g === 2 ? ' ⚠️' : '') + '\n';
+    algumLab = true;
+  });
+  if (!algumLab) r += 'Sem resultados registrados\n';
+  var sel = getSelectedAlarmes();
+  if (sel.length > 0) {
+    r += '\n🚨 SINAIS DE ALERTA\n' + S + '\n';
+    sel.forEach(function(a){ r += '  ' + a.icon + ' ' + a.text + '\n'; });
+  }
+  var obs = v('obs');
+  if (obs) r += '\nOBSERVAÇÕES\n' + S + '\n' + obs + '\n';
+  r += '\nCONCLUSÃO\n' + S + '\n' + (conclusao ? CLBL[conclusao] : 'Não definida') + '\n';
+  // Orientações terapêuticas automáticas
+  var orientacoes = window._orientacoesAtuais || [];
+  if (orientacoes.length > 0) {
+    r += '\nORIENTAÇÕES TERAPÊUTICAS\n' + S + '\n';
+    orientacoes.forEach(function(o){ r += o + '\n'; });
+  }
+  r += '\n' + S2 + '\nHospital do Bem · Patos-PB\n';
+  document.getElementById('resBody').textContent = r;
+  updatePayloadPreview();
+}
+
+// ════════════════════════════════
+// DOCUMENTOS
+// ════════════════════════════════
+function docHeader() {
+  var now = new Date(), dt = now.toLocaleDateString('pt-BR');
+  var nome = v('nome') || '—';
+  var idStr = v('idade') ? v('idade') + ' anos' : '—';
+  return [
+    'Paciente : ' + nome,
+    'Idade    : ' + idStr,
+    'Data     : ' + dt,
+  ];
+}
+
+function buildLabDoc() {
+  var S = '─'.repeat(44);
+  var sel = getSelectedAlarmes();
+  var lines = ['### SOLICITAÇÃO DE EXAMES ###', ''].concat(docHeader()).concat([
+    S,
+    '### EXAMES SOLICITADOS ###', '',
+    '  • HEMOGRAMA COMPLETO COM DIFERENCIAL',
+    '  • UREIA',
+    '  • CREATININA',
+    '  • TGO (AST)',
+    '  • TGP (ALT)',
+    '',
+    'Indicação: Controle de quimioterapia',
+    '',
+    S,
+    'LEMBRETE', '',
+    '  ✓ Trazer os exames na consulta',
+    '  ✓ Coletar 2 dias antes do retorno — IDEAL',
+    S,
+    'SINAIS DE ALARME', '',
+    'Procure atendimento IMEDIATO se apresentar:', '',
+    '  🌡️  Febre igual ou acima de 38°C',
+    '  🥶  Febre com calafrios intensos',
+    '  🔴  Dor / vermelhidão / secreção no cateter',
+    '  😮  Tosse com catarro',
+    '  🚽  Urina fétida e dor ao urinar',
+    '  🩹  Vermelhidão e inchaço na pele',
+    '  🦷  Dor intensa ao engolir',
+    '  🦠  Diarreia com cólica e cheiro forte',
+    '  👄  Feridas na boca',
+    '  🩸  Sangramento ativo',
+    '  😮‍💨  Falta de ar em repouso',
+    '  😵  Confusão mental',
+  ]);
+  if (sel.length > 0) {
+    lines.push('', '⚠️ ALERTAS DESTA TRIAGEM');
+    sel.forEach(function(a){ lines.push('   ' + a.icon + ' ' + a.text); });
+  }
+  lines.push('', S);
+  document.getElementById('labDocBody').textContent = lines.join('\n');
+}
+
+function setRet(dias, el) {
+  retDiasVal = retDiasVal === dias ? null : dias;
+  document.querySelectorAll('.ret-btn').forEach(function(b){ b.classList.remove('on'); });
+  if (retDiasVal !== null) el.classList.add('on');
+  buildRetDoc();
+}
+
+function buildRetDoc() {
+  var now = new Date(), dt = now.toLocaleDateString('pt-BR');
+  var S = '─'.repeat(44);
+  var prazo = retDiasVal ? retDiasVal + ' dias a partir de ' + dt : '⬜ A definir';
+  var lines = ['### FICHA DE RETORNO ###', ''].concat(docHeader()).concat([
+    S,
+    '### RETORNO PREVISTO ###', '',
+    '  ' + prazo, '',
+    '⚠️  Confirme a data com a secretaria.',
+    S,
+    'TRAZER NA PRÓXIMA CONSULTA', '',
+    '  ✓ Exames de sangue — COLETAR 2 DIAS ANTES',
+    '  ✓ Exames de imagem (se houver)',
+    '  ✓ Lista de medicamentos em uso',
+    '  ✓ Esta ficha',
+    S,
+    'SINAIS DE ALARME', '',
+    '  🌡️  Febre ≥ 38°C',
+    '  🥶  Febre com calafrios',
+    '  🔴  Dor / secreção no cateter',
+    '  😮  Tosse com catarro',
+    '  🚽  Urina fétida',
+    '  🩹  Vermelhidão na pele',
+    '  🦷  Dor ao engolir',
+    '  🦠  Diarreia com cheiro forte',
+    '  👄  Feridas na boca',
+    '  🩸  Sangramento ativo',
+    '  😮‍💨  Falta de ar em repouso',
+    '  😵  Confusão mental',
+    S,
+    'ORIENTAÇÃO DIETÉTICA', '',
+    'INDICADOS', '',
+    '  ✅ Carne bovina, frango e peixe bem cozidos',
+    '  ✅ Ovo cozido com GEMA DURA',
+    '  ✅ Leite fervido e pasteurizados',
+    '  ✅ Água mineral ou fervida',
+    '  ✅ Água de coco',
+    '  ✅ Pequenas refeições frequentes',
+    '  ✅ Hidratação constante',
+    '',
+    'PROIBIDOS', '',
+    '  ❌ Carne de porco e embutidos',
+    '  ❌ Chás sem prescrição médica',
+    '  ❌ Suplementos sem prescrição',
+    '  ❌ Carnes / peixes crus',
+    '  ❌ Alimentos com casca',
+    '  ❌ Alimentos gelados',
+    '  ❌ Mel, castanhas',
+    '  ❌ Ovo com gema mole / cru',
+    '  ❌ Leite não fervido',
+    '  ❌ Açúcar em excesso e frituras',
+    S,
+  ]);
+  document.getElementById('retDocBody').textContent = lines.join('\n');
+}
+
+function buildMedDoc() {
+  var S = '─'.repeat(44);
+  var lines = ['### MEDICAÇÕES ###', '### UNIDADE DE SAÚDE DO MUNICÍPIO ###', ''].concat(docHeader()).concat([
+    S,
+    '### MEDICAÇÃO ENDOVENOSA ###', '',
+    '  1. SORO FISIOLÓGICO 0,9% — 1000 mL ...... 1 un',
+    '     + Complexo B — 2 ampolas',
+    '     Diluir e infundir LENTAMENTE em 3 horas (EV)',
+    '',
+    '⚠️  ATENÇÃO À SOBRECARGA HÍDRICA',
+    '',
+    '  Repetir até 3 vezes na semana se necessário.',
+    '',
+    S,
+    '### MEDICAÇÃO ORAL — SE NECESSÁRIO ###', '',
+    '  1. OMEPRAZOL 20 mg',
+    '     1 cápsula 1× ao dia, em JEJUM',
+    '',
+    '  2. ONDANSETRONA 8 mg',
+    '     1 comprimido 3× ao dia se NÁUSEAS / VÔMITOS',
+    '',
+    '  3. METOCLOPRAMIDA 10 mg',
+    '     1 comprimido 3× ao dia se NÁUSEAS / VÔMITOS',
+    '',
+    '  4. LOPERAMIDA 2 mg',
+    '     1 comprimido até 6× ao dia se DIARREIA',
+    '',
+    '  5. ÓLEO MINERAL 15 mL',
+    '     1 colher de sopa 2× ao dia se CONSTIPAÇÃO',
+    '',
+    S,
+    'OBSERVAÇÕES PARA A EQUIPE', '',
+    '  ✓ Monitorar sinais vitais antes, durante e após',
+    '  ✓ Observar débito urinário',
+    '  ✓ Auscultar bases pulmonares — sobrecarga',
+    '  ✓ Pacientes idosos ou cardiopatas: cuidado',
+    '  ✓ Suspender soro se dispneia / edema MMII',
+    S,
+  ]);
+  document.getElementById('medDocBody').textContent = lines.join('\n');
+}
+
+function switchDocTab(tab, el) {
+  document.querySelectorAll('.doc-tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.doc-panel').forEach(function(p){ p.classList.remove('active'); });
+  el.classList.add('active');
+  var map = { lab:'dpLab', ret:'dpRet', med:'dpMed' };
+  document.getElementById(map[tab]).classList.add('active');
+}
+
+// ════════════════════════════════
+// PRINT — fontes 18pt+ negrito sublinhado nos destaques
+// ════════════════════════════════
+function printDoc(type) {
+  var nome = v('nome') || '_______________________';
+  var idade = v('idade') ? v('idade') : '___';
+  var ciclo = v('ciclo') ? v('ciclo') : '';
+  var now = new Date();
+  var dia = String(now.getDate()).padStart(2, '0');
+  var mes = String(now.getMonth() + 1).padStart(2, '0');
+  var ano = now.getFullYear();
+
+  var docHtml;
+  if (type === 'lab') docHtml = renderLabReq(nome, idade, ciclo, dia, mes, ano);
+  else if (type === 'ret') docHtml = renderRetReq(nome, idade, ciclo, dia, mes, ano);
+  else if (type === 'med') docHtml = renderMedReq(nome, idade, ciclo, dia, mes, ano);
+  else return;
+
+  // Usa IFRAME oculto — funciona em iOS Safari, Chrome mobile e desktop
+  // Sem popup bloqueado
+  var oldFrame = document.getElementById('printFrame');
+  if (oldFrame) oldFrame.remove();
+
+  var iframe = document.createElement('iframe');
+  iframe.id = 'printFrame';
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+
+  var doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(docHtml);
+  doc.close();
+
+  // Aguarda renderização e dispara impressão
+  setTimeout(function(){
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch(e) {
+      // Fallback: abrir nova aba se iframe falhar
+      var w = window.open('', '_blank');
+      if (w) { w.document.write(docHtml); w.document.close(); w.focus(); setTimeout(function(){ w.print(); }, 500); }
+      else alert('Por favor, permita pop-ups para imprimir.');
+    }
+  }, 400);
+}
+
+// ════════════════════════════════
+// TEMPLATES DOS DOCUMENTOS — HOSPITAL DO BEM
+// ════════════════════════════════
+function hospitalHeader() {
+  return [
+    '<div style="background:#0D1B3E;padding:14px 24px;color:#fff;position:relative">',
+    '  <div style="display:flex;align-items:center;gap:10px">',
+    '    <div style="width:36px;height:36px;background:#0E7490;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;color:#fff;flex-shrink:0">H</div>',
+    '    <div style="flex:1">',
+    '      <div style="font-size:18pt;font-weight:900;letter-spacing:.5px">HOSPITAL DO BEM</div>',
+    '      <div style="font-size:9pt;color:rgba(255,255,255,.7);margin-top:1px">Unidade Oncológica — Complexo Hospitalar Regional Dep. Janduhy Carneiro</div>',
+    '    </div>',
+    '    <div style="font-size:9pt;color:rgba(255,255,255,.7);text-align:right;flex-shrink:0">',
+    '      <div style="font-weight:700">Dr. Silas Negrão</div>',
+    '      <div>CRM-PB 17341</div>',
+    '    </div>',
+    '  </div>',
+    '</div>'
+  ].join('');
+}
+
+function hospitalFooter(dia, mes, ano) {
+  return [
+    '<div style="margin-top:auto;padding-top:30px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px">',
+    '  <div style="flex:1">',
+    '    <div style="border-top:1.5px solid #0D1B3E;width:280px;padding-top:6px">',
+    '      <div style="font-size:11pt;font-weight:bold;color:#0D1B3E">Dr. Silas Negrão — CRM-PB 17341</div>',
+    '      <div style="font-size:10pt;color:#475569;margin-top:2px">Data: ' + dia + ' / ' + mes + ' / ' + ano + '</div>',
+    '    </div>',
+    '  </div>',
+    '  <div style="border:1.5px dashed #94A3B8;padding:30px 40px;text-align:center;color:#94A3B8;font-size:9pt;font-style:italic">CARIMBO</div>',
+    '</div>',
+    '<div style="border-top:2px solid #0E7490;margin-top:14px;padding-top:6px;text-align:center;font-size:8pt;color:#64748B">',
+    '  Hospital do Bem — Unidade Oncológica · Patos-PB · Dr. Silas Negrão — CRM-PB 17341',
+    '</div>'
+  ].join('');
+}
+
+function patientInfoBox(nome, idade, dia, mes, ano) {
+  return [
+    '<div style="background:#F1F5F9;border:1px solid #CBD5E1;padding:11px 16px;border-radius:6px;margin:14px 24px 12px 24px;display:grid;grid-template-columns:3.5fr 1fr 1.2fr;gap:14px;font-size:10pt">',
+    '  <div><span style="font-weight:bold;color:#475569">NOME:</span> ' + nome + '</div>',
+    '  <div><span style="font-weight:bold;color:#475569">IDADE:</span> ' + idade + '</div>',
+    '  <div><span style="font-weight:bold;color:#475569">DATA:</span> ' + dia + '/' + mes + '/' + ano + '</div>',
+    '</div>'
+  ].join('');
+}
+
+function bigTitle(text) {
+  return '<div style="font-size:36pt;font-weight:900;color:#0D1B3E;text-align:center;margin:18px 0 14px 0;letter-spacing:1px">' + text + '</div>';
+}
+
+function blueBanner(lines) {
+  var content = lines.map(function(l){ return '<div style="margin:1px 0">' + l + '</div>'; }).join('');
+  return '<div style="background:#0E7490;color:#fff;padding:9px 24px;text-align:center;font-size:11pt;font-weight:bold;margin:0 24px 14px 24px;border-radius:4px">' + content + '</div>';
+}
+
+function htmlShell(title, bodyInner) {
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>' + title + '</title>'
+    + '<style>'
+    + '@page{margin:0;size:A4}'
+    + 'body{font-family:Helvetica,Arial,sans-serif;color:#111;margin:0;padding:0;min-height:100vh;display:flex;flex-direction:column}'
+    + 'table{border-collapse:collapse;width:100%}'
+    + '.content{flex:1;padding:0 24px;display:flex;flex-direction:column}'
+    + '</style></head><body>'
+    + bodyInner
+    + '</body></html>';
+}
+
+// ─── EXAMES DE LABORATÓRIO ───
+function renderLabReq(nome, idade, ciclo, dia, mes, ano) {
+  var sel = getSelectedAlarmes();
+  var labDate = v('labDate');
+  var labInfo = '';
+  if (labDate) {
+    var d = labDate.split('-');
+    labInfo = ' (último exame: ' + d[2] + '/' + d[1] + '/' + d[0] + ' — ' + getLabDateText().toLowerCase() + ')';
+  }
+
+  var body = ''
+    + hospitalHeader()
+    + '<div style="background:#0E7490;color:#fff;padding:6px 24px;font-size:12pt;font-weight:bold;letter-spacing:.5px">REQUISIÇÃO DE EXAMES</div>'
+    + patientInfoBox(nome, idade, dia, mes, ano)
+    + bigTitle('EXAME DE SANGUE')
+    + blueBanner(['COLETAR NA DATA MAIS PRÓXIMA DA CONSULTA', 'E SEMPRE TRAZER O RESULTADO AO MÉDICO!'])
+    + '<div style="padding:0 24px">'
+    +   '<table style="margin-bottom:10px"><tr>'
+    +     '<td style="background:#0D1B3E;color:#fff;padding:8px 14px;font-size:11pt;font-weight:bold;width:33.33%;border-radius:3px">CICLO ' + (ciclo || '1') + '</td>'
+    +     '<td style="width:14px"></td>'
+    +     '<td style="background:#0E7490;color:#fff;padding:8px 14px;font-size:11pt;font-weight:bold;width:33.33%;border-radius:3px">CICLO ' + (parseInt(ciclo || '1') + 1) + '</td>'
+    +     '<td style="width:14px"></td>'
+    +     '<td style="background:#7C2D12;color:#fff;padding:8px 14px;font-size:11pt;font-weight:bold;width:33.33%;border-radius:3px">CICLO ' + (parseInt(ciclo || '1') + 2) + '</td>'
+    +   '</tr><tr>'
+    +     '<td style="font-size:9pt;color:#64748B;padding:6px 14px">Data: ___/___/______</td><td></td>'
+    +     '<td style="font-size:9pt;color:#64748B;padding:6px 14px">Data: ___/___/______</td><td></td>'
+    +     '<td style="font-size:9pt;color:#64748B;padding:6px 14px">Data: ___/___/______</td>'
+    +   '</tr></table>';
+
+  var exames = ['HEMOGRAMA','UREIA','CREATININA','TGO (AST)','TGP (ALT)'];
+  exames.forEach(function(ex, i){
+    var bg = i % 2 === 0 ? '#F8FAFF' : '#fff';
+    body += '<table style="margin:0"><tr>'
+      + '<td style="background:' + bg + ';padding:9px 14px;font-size:11pt;font-weight:bold;color:#0D1B3E;width:160px;border-bottom:1px solid #E2E8F0">' + ex + '</td>'
+      + '<td style="background:' + bg + ';padding:9px 14px;font-size:14pt;font-weight:bold;color:#0D1B3E;text-align:center;border-bottom:1px solid #E2E8F0">☒</td>'
+      + '<td style="background:' + bg + ';padding:9px 14px;font-size:14pt;font-weight:bold;color:#0D1B3E;text-align:center;border-bottom:1px solid #E2E8F0">☒</td>'
+      + '<td style="background:' + bg + ';padding:9px 14px;font-size:14pt;font-weight:bold;color:#0D1B3E;text-align:center;border-bottom:1px solid #E2E8F0">☒</td>'
+      + '</tr></table>';
+  });
+
+  body += '<div style="margin-top:14px;font-size:10pt;color:#64748B;font-weight:bold">EXAMES ADICIONAIS (preencher conforme indicação):</div>';
+  for (var k = 0; k < 5; k++) {
+    body += '<table style="margin-top:6px"><tr>'
+      + '<td style="border-bottom:1px dotted #94A3B8;padding:4px 14px;font-size:11pt;height:24px">&nbsp;</td>'
+      + '<td style="border:1px solid #94A3B8;width:30px;height:24px"></td>'
+      + '<td style="border:1px solid #94A3B8;width:30px;height:24px;margin-left:8px"></td>'
+      + '<td style="border:1px solid #94A3B8;width:30px;height:24px;margin-left:8px"></td>'
+      + '</tr></table>';
+  }
+
+  // Sinais de alarme (se houver)
+  if (sel.length > 0) {
+    body += '<div style="margin-top:18px;padding:12px;background:#FEF2F2;border:2px solid #FCA5A5;border-radius:6px">'
+      + '<div style="font-size:12pt;font-weight:bold;color:#B91C1C;margin-bottom:8px">⚠️ SINAIS DE ALARME DESTA TRIAGEM</div>';
+    sel.forEach(function(a){
+      body += '<div style="font-size:11pt;font-weight:bold;color:#B91C1C;padding:3px 0">' + a.icon + ' ' + a.text + '</div>';
+    });
+    body += '</div>';
+  }
+
+  body += '</div>'  // fecha padding 24px
+    + '<div style="flex:1"></div>'
+    + '<div style="padding:0 24px 18px 24px">' + hospitalFooter(dia, mes, ano) + '</div>';
+
+  return htmlShell('Requisição de Exames — ' + nome, '<div class="content">' + body + '</div>');
+}
+
+// ─── FICHA DE RETORNO ───
+function renderRetReq(nome, idade, ciclo, dia, mes, ano) {
+  var prazo = retDiasVal ? retDiasVal + ' DIAS' : '___ DIAS';
+
+  var body = ''
+    + hospitalHeader()
+    + '<div style="background:#0E7490;color:#fff;padding:6px 24px;font-size:12pt;font-weight:bold;letter-spacing:.5px">FICHA DE RETORNO</div>'
+    + patientInfoBox(nome, idade, dia, mes, ano)
+
+    + '<div style="padding:0 24px">'
+    + '<div style="background:#0E7490;color:#fff;padding:9px 18px;text-align:center;font-size:12pt;font-weight:bold;margin-top:4px;border-radius:4px">'
+    +   'RETORNO PREVISTO EM <span style="font-size:16pt;background:#fff;color:#0E7490;padding:2px 14px;border-radius:4px;margin:0 4px">' + prazo + '</span> · Confirmar data com a secretaria'
+    + '</div>'
+
+    + '<div style="background:#0D1B3E;color:#fff;padding:6px 14px;font-size:11pt;font-weight:bold;margin-top:10px;border-radius:3px">TRAZER NA PRÓXIMA CONSULTA</div>'
+    + '<table style="margin-top:4px">'
+    + '<tr><td style="padding:4px 14px;font-size:10pt;font-weight:bold;color:#0D1B3E;border-bottom:1px solid #E2E8F0">☐ Exames de sangue — <span style="color:#B91C1C">COLETAR 2 DIAS ANTES</span></td></tr>'
+    + '<tr><td style="padding:4px 14px;font-size:10pt;font-weight:bold;color:#0D1B3E;border-bottom:1px solid #E2E8F0">☐ Exames de imagem (se houver)</td></tr>'
+    + '<tr><td style="padding:4px 14px;font-size:10pt;font-weight:bold;color:#0D1B3E;border-bottom:1px solid #E2E8F0">☐ Lista de medicamentos em uso</td></tr>'
+    + '<tr><td style="padding:4px 14px;font-size:10pt;font-weight:bold;color:#0D1B3E;border-bottom:1px solid #E2E8F0">☐ Esta ficha</td></tr>'
+    + '</table>'
+
+    // ─── 2 COLUNAS: Alarme | Dieta ───
+    + '<table style="margin-top:10px"><tr>'
+
+    + '<td style="width:48%;vertical-align:top;padding-right:8px">'
+    +   '<div style="background:#B91C1C;color:#fff;padding:6px 12px;font-size:11pt;font-weight:bold;border-radius:3px">⚠️ SINAIS DE ALARME</div>'
+    +   '<div style="font-size:9pt;color:#475569;margin:4px 0;font-style:italic">Procure atendimento IMEDIATO se apresentar:</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">🌡️ Febre ≥ 38°C</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">🥶 Febre com calafrios</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">🔴 Dor/secreção no cateter</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">😮 Tosse com catarro</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">🚽 Urina fétida / disúria</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">🩹 Vermelhidão na pele</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">🦷 Dor ao engolir</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">🦠 Diarreia c/ cheiro forte</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">👄 Feridas na boca</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">🩸 Sangramento ativo</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">😮‍💨 Falta de ar em repouso</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:1px 0">😵 Confusão mental</div>'
+    + '</td>'
+
+    + '<td style="width:52%;vertical-align:top;padding-left:10px;border-left:2px solid #E2E8F0">'
+    +   '<div style="background:#15803D;color:#fff;padding:7px 14px;font-size:12pt;font-weight:bold;border-radius:3px">🍽️ ORIENTAÇÃO DIETÉTICA</div>'
+
+    +   '<div style="font-size:10.5pt;font-weight:bold;color:#15803D;margin-top:6px;text-transform:uppercase">✅ Recomendados</div>'
+    +   '<div style="font-size:10.5pt;color:#0D1B3E;line-height:1.5;margin-top:3px">'
+    +     '<b>Proteínas:</b> frango desfiado, peixe, ovos, queijo, iogurte, feijão, lentilha.<br/>'
+    +     '<b>Bebidas/leves:</b> vitamina de frutas, sopas cremosas, canja, caldo leve, gelatina.<br/>'
+    +     '<b>Carboidratos:</b> arroz, batata, mandioquinha, macaxeira/aipim bem cozido, cuscuz, tapioca, pão simples, aveia, macarrão.<br/>'
+    +     '<b>Lanches:</b> torrada, bolacha água e sal, pão simples, banana, maçã.'
+    +   '</div>'
+
+    +   '<div style="font-size:10.5pt;font-weight:bold;color:#B91C1C;margin-top:8px;text-transform:uppercase">❌ Evitar</div>'
+    +   '<div style="font-size:10.5pt;color:#0D1B3E;line-height:1.5;margin-top:3px">'
+    +     '<b>Digestivos:</b> frituras, comida gordurosa, condimentos, cheiros fortes, grandes volumes.<br/>'
+    +     '<b>Ácidos/irritantes:</b> limão, laranja, abacaxi e frutas ácidas, pimenta.<br/>'
+    +     '<b>Bebidas:</b> álcool, refrigerante.<br/>'
+    +     '<b>Texturas/temperaturas:</b> torradas duras, farofa seca, alimentos muito quentes ou crocantes.'
+    +   '</div>'
+    + '</td>'
+
+    + '</tr></table>'
+
+    + '</div>'
+    + '<div style="flex:1"></div>'
+    + '<div style="padding:10px 24px 18px 24px">' + hospitalFooter(dia, mes, ano) + '</div>';
+
+  return htmlShell('Ficha de Retorno — ' + nome, '<div class="content">' + body + '</div>');
+}
+
+// ─── MEDICAÇÕES ───
+function renderMedReq(nome, idade, ciclo, dia, mes, ano) {
+  // Receita Médica padrão Hospital do Bem
+  var body = ''
+    + hospitalHeader()
+    + '<div style="background:#0E7490;color:#fff;padding:6px 24px;font-size:12pt;font-weight:bold;letter-spacing:.5px">RECEITA MÉDICA</div>'
+    + patientInfoBox(nome, idade, dia, mes, ano)
+    + '<div style="padding:0 24px">'
+
+    // ── VIA ORAL ──
+    + '<div style="background:#0D1B3E;color:#fff;padding:7px 14px;font-size:12pt;font-weight:bold;border-radius:3px;margin-top:6px">VIA ORAL</div>';
+
+  var medOral = [
+    ['PANTOPRAZOL 20 MG',     '1 cp jejum, 30 min antes de comer. Tomar durante toda a QT.'],
+    ['ONDANSETRONA 8 MG',     '1 cp 8/8h por 2 DIAS após QT mesmo sem náuseas, depois só SN.'],
+    ['METOCLOPRAMIDA 10 MG',  '1 cp 8/8h por 2 DIAS após QT mesmo sem náuseas, depois só SN.'],
+    ['DIMENIDRINATO 50 MG',   '1 cp 8/8h por 2 DIAS após QT mesmo sem náuseas, depois só SN.'],
+    ['DEXAMETASONA 4 MG',     '1 cp NOITE ANTERIOR + 1 cp DIA SEGUINTE. NÃO tomar no dia da QT!'],
+    ['LOPERAMIDA 2 MG',       'Se diarreia: 2 cp início, 1 cp/2h (máx 8 cp). Não cessou? PRONTO SOCORRO!'],
+    ['LACTULOSE XAROPE',      'Se 3 dias sem evacuar: 15-30 mL 12/12h.'],
+    ['SIMETICONA 125 MG',     'Se gases: 1 cp 8/8h após refeições.'],
+  ];
+  medOral.forEach(function(m, i){
+    var bg = i % 2 === 0 ? '#F8FAFF' : '#fff';
+    body += '<div style="background:' + bg + ';padding:4px 14px;border-bottom:1px solid #E2E8F0">'
+      + '<div style="font-size:10.5pt;font-weight:bold;color:#0E7490">' + m[0] + '</div>'
+      + '<div style="font-size:9.5pt;color:#0D1B3E;font-weight:bold">' + m[1] + '</div>'
+      + '</div>';
+  });
+
+  // ── VIA ENDOVENOSA — A CRITÉRIO MÉDICO ──
+  body += '<div style="background:#0D1B3E;color:#fff;padding:7px 14px;font-size:12pt;font-weight:bold;border-radius:3px;margin-top:10px;display:flex;justify-content:space-between;align-items:center">'
+    + '<span>VIA ENDOVENOSA</span>'
+    + '<span style="font-size:9pt;font-weight:bold;background:#B45309;color:#fff;padding:3px 10px;border-radius:12px;letter-spacing:.5px">A/C MÉDICO</span>'
+    + '</div>';
+
+  var medEv = [
+    ['SF 0,9% 1000 mL + COMPLEXO B', 'Diluir 2 ampolas de Complexo B em 1000 mL de SF 0,9%, infundir em 3h. Repetir 2 dias pós-QT.'],
+    ['ONDANSETRONA EV 8 MG',        'Diluir em 50-100 mL SF, infundir em 15 min. 8/8 a 12/12h SN.'],
+    ['METOCLOPRAMIDA EV 10 MG',     'Diluir em 50-100 mL SF, infundir em 20 min. 6/6 a 8/8h SN.'],
+    ['NORIPURUM EV (se anemia)',    '100-200 mg em 100-250 mL SF, infundir em 30 min. Monitorar.'],
+    ['BUSCOPAN COMPOSTO EV',        '1-2 amp em 100-250 mL SF, infundir em 30 min. Não fazer bólus.'],
+    ['DEXAMETASONA EV',             '4-10 mg EV lento (1 min) ou em 50-100 mL SF em 15 min.'],
+  ];
+  medEv.forEach(function(m, i){
+    var bg = i % 2 === 0 ? '#F8FAFF' : '#fff';
+    body += '<div style="background:' + bg + ';padding:4px 14px;border-bottom:1px solid #E2E8F0">'
+      + '<div style="font-size:10.5pt;font-weight:bold;color:#0E7490">' + m[0] + '</div>'
+      + '<div style="font-size:9.5pt;color:#0D1B3E;font-weight:bold">' + m[1] + '</div>'
+      + '</div>';
+  });
+
+  body += '<div style="background:#B91C1C;color:#fff;padding:8px 14px;font-size:11pt;font-weight:bold;text-align:center;margin-top:10px;border-radius:3px">OBSERVAÇÃO AO MÉDICO PLANTONISTA</div>'
+    + '<div style="background:#FEF2F2;border:1px solid #FCA5A5;padding:8px 14px;font-size:10pt;color:#0D1B3E;text-align:center;font-weight:bold;border-bottom-left-radius:3px;border-bottom-right-radius:3px">'
+    + 'Nenhuma medicação ou antibiótico está contraindicado(a) ao paciente.'
+    + '</div>';
+
+  body += '</div>'  // fecha padding
+    + '<div style="flex:1"></div>'
+    + '<div style="padding:14px 24px 18px 24px">' + hospitalFooter(dia, mes, ano) + '</div>';
+
+  var html1 = '<div class="content">' + body + '</div>';
+
+  // ═════ Página 2: orientações dietéticas conforme sintomas ═════
+  var html2 = buildDietPage(nome, idade, dia, mes, ano);
+
+  return htmlShell('Receita Médica — ' + nome, html1 + '<div style="page-break-before:always"></div>' + html2);
+}
+
+// ═════════════════════════════════════════════════════
+// PÁGINA DE ORIENTAÇÕES — Sinais de Alarme + Dieta
+// Em duas colunas, sempre 1 página
+// ═════════════════════════════════════════════════════
+function buildDietPage(nome, idade, dia, mes, ano) {
+  // Detecta sintomas presentes para gerar dieta específica on-demand
+  // Liga diretamente com o que o enfermeiro clicou no CTCAE
+  var sintomas = [];
+  if (tSel.diarreia !== null && tSel.diarreia >= 1) sintomas.push('diarreia');
+  if (tSel.mucosite !== null && tSel.mucosite >= 1) sintomas.push('mucosite');
+  if (tSel.nausea !== null && tSel.nausea >= 1) sintomas.push('nausea');
+  if (tSel.vomito !== null && tSel.vomito >= 1) sintomas.push('nausea'); // mesma dieta para náusea/vômito
+  if (tSel.perdaPeso !== null && tSel.perdaPeso >= 1) sintomas.push('caquexia');
+  // Constipação não é CTCAE direto — detectada se diurese reduzida ou observação contém 'constipa'
+  var obsText = v('obs').toLowerCase();
+  if (obsText.indexOf('constipa') >= 0 || obsText.indexOf('intestino preso') >= 0 || obsText.indexOf('sem evacuar') >= 0) {
+    sintomas.push('constipacao');
+  }
+  // Remove duplicatas (náusea + vômito)
+  sintomas = sintomas.filter(function(s, i){ return sintomas.indexOf(s) === i; });
+
+  var dietaEspecifica = sintomas.length > 0 ? buildDietaEspecifica(sintomas) : null;
+
+  var body = ''
+    + hospitalHeader()
+    + '<div style="background:#0E7490;color:#fff;padding:6px 24px;font-size:12pt;font-weight:bold;letter-spacing:.5px">ORIENTAÇÕES AO PACIENTE</div>'
+    + patientInfoBox(nome, idade, dia, mes, ano)
+    + '<div style="padding:0 24px">'
+
+    // ─── 2 COLUNAS: Sinais de alarme | Orientação dietética geral ───
+    + '<table style="margin-top:8px"><tr>'
+
+    // COLUNA ESQUERDA — SINAIS DE ALARME
+    + '<td style="width:48%;vertical-align:top;padding-right:8px">'
+    +   '<div style="background:#B91C1C;color:#fff;padding:7px 12px;font-size:11pt;font-weight:bold;border-radius:3px">⚠️ SINAIS DE ALARME</div>'
+    +   '<div style="font-size:9pt;color:#475569;margin:6px 0;font-style:italic">Procure atendimento imediato:</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">🌡️ Febre ≥ 38°C</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">🥶 Febre com calafrios</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">🔴 Dor/secreção no cateter</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">😮 Tosse com catarro</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">🚽 Urina fétida / disúria</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">🩹 Vermelhidão na pele</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">🦷 Dor ao engolir</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">🦠 Diarreia c/ cheiro forte</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">👄 Feridas na boca</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">🩸 Sangramento ativo</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">😮‍💨 Falta de ar</div>'
+    +   '<div style="font-size:10pt;font-weight:bold;color:#B91C1C;padding:2px 0">😵 Confusão mental</div>'
+    + '</td>'
+
+    // COLUNA DIREITA — ORIENTAÇÃO DIETÉTICA GERAL
+    + '<td style="width:52%;vertical-align:top;padding-left:10px;border-left:2px solid #E2E8F0">'
+    +   '<div style="background:#15803D;color:#fff;padding:8px 14px;font-size:13pt;font-weight:bold;border-radius:3px">🍽️ ORIENTAÇÃO DIETÉTICA</div>'
+
+    +   '<div style="font-size:11pt;font-weight:bold;color:#15803D;margin-top:8px;text-transform:uppercase">✅ Recomendados</div>'
+    +   '<div style="font-size:11pt;color:#0D1B3E;line-height:1.55;margin-top:4px">'
+    +     '<b>Proteínas:</b> frango desfiado, peixe, ovos, queijo, iogurte, feijão, lentilha.<br/>'
+    +     '<b>Bebidas/leves:</b> vitamina de frutas, sopas cremosas, canja, caldo leve, gelatina.<br/>'
+    +     '<b>Carboidratos:</b> arroz, batata, mandioquinha, macaxeira/aipim bem cozido, cuscuz, tapioca, pão simples, aveia, macarrão.<br/>'
+    +     '<b>Lanches:</b> torrada, bolacha água e sal, pão simples, banana, maçã.'
+    +   '</div>'
+
+    +   '<div style="font-size:11pt;font-weight:bold;color:#B91C1C;margin-top:10px;text-transform:uppercase">❌ Evitar</div>'
+    +   '<div style="font-size:11pt;color:#0D1B3E;line-height:1.55;margin-top:4px">'
+    +     '<b>Sintomas digestivos:</b> frituras, comida muito gordurosa, alimentos muito condimentados, cheiros fortes, grandes volumes de comida.<br/>'
+    +     '<b>Frutas ácidas/irritantes:</b> limão, laranja, abacaxi e frutas muito ácidas, pimenta.<br/>'
+    +     '<b>Bebidas:</b> álcool, refrigerante.<br/>'
+    +     '<b>Texturas/temperaturas:</b> torradas duras, farofa seca, alimentos muito quentes, alimentos crocantes que machucam a mucosa.'
+    +   '</div>'
+    + '</td>'
+
+    + '</tr></table>';
+
+  // Se há sintomas específicos, adiciona seção com orientação direcionada
+  if (dietaEspecifica) {
+    body += dietaEspecifica;
+  }
+
+  body += '</div>'
+    + '<div style="flex:1"></div>'
+    + '<div style="padding:14px 24px 18px 24px">' + hospitalFooter(dia, mes, ano) + '</div>';
+
+  return '<div class="content">' + body + '</div>';
+}
+
+// ═════════════════════════════════════════════════════
+// Dietas específicas conforme sintomas presentes
+// ═════════════════════════════════════════════════════
+function buildDietaEspecifica(sintomas) {
+  var DIETAS = {
+    diarreia: {
+      titulo: '💧 ORIENTAÇÃO ESPECÍFICA — DIARREIA',
+      cor: '#0E7490',
+      indicados: 'Água, soro de reidratação oral, água de coco. Arroz branco, batata cozida, macarrão simples, pão branco, torrada, bolacha água e sal. Banana, maçã sem casca, maçã cozida, goiaba, pera sem casca. Cenoura, chuchu e abóbora cozidos. Canja, caldo de legumes coado. Frango ou peixe cozidos/grelhados. Ovo bem cozido. Gelatina. Chá claro sem cafeína.',
+      evitar: 'Frituras, alimentos gordurosos, leite (se piorar), creme de leite, queijos gordurosos. Feijão, lentilha e grão-de-bico em excesso. Verduras e saladas cruas, cascas de frutas, cereais integrais, aveia em excesso, granola. Mamão, ameixa, laranja com bagaço. Café, refrigerante, álcool. Pimenta, molhos fortes. Adoçantes com sorbitol/manitol/xilitol.',
+    },
+    nausea: {
+      titulo: '🤢 ORIENTAÇÃO ESPECÍFICA — NÁUSEAS / VÔMITOS',
+      cor: '#EA580C',
+      indicados: 'Pequenas refeições frequentes (5-6×/dia). Alimentos secos pela manhã: torrada, bolacha água e sal, biscoito maisena. Bebidas geladas em pequenos goles: água, água de coco, sucos diluídos, gengibre em chá frio. Frutas leves: banana, maçã, pera sem casca, melancia. Carboidratos suaves: arroz, batata, macarrão simples. Proteínas leves: frango grelhado, peixe cozido, ovo cozido, gelatina, iogurte natural. Evitar deitar logo após comer.',
+      evitar: 'Frituras, alimentos muito gordurosos ou condimentados. Cheiros fortes durante o preparo (afastar-se da cozinha). Grandes volumes de comida. Frutas ácidas (limão, laranja, abacaxi, acerola). Café forte, refrigerante, álcool. Alimentos muito quentes — preferir frios ou mornos. Doces concentrados e gorduras pesadas.',
+    },
+    constipacao: {
+      titulo: '🌾 ORIENTAÇÃO ESPECÍFICA — CONSTIPAÇÃO',
+      cor: '#15803D',
+      indicados: 'Aumentar ingestão de água (mínimo 2 L/dia), água de coco. Suco de ameixa. Mamão, ameixa, abacate. Pera e maçã com casca bem higienizada. Aveia, farelo de aveia, chia hidratada, linhaça triturada. Feijão, lentilha, grão-de-bico, ervilha. Arroz e pão integrais se tolerados. Verduras cozidas, abóbora, brócolis cozido, couve refogada. Azeite. Iogurte pasteurizado se tolerado. Caminhada leve regular.',
+      evitar: 'Baixa ingestão de água, dieta exclusivamente seca. Excesso de pão branco, arroz branco, macarrão simples, bolacha, banana-prata ou verde. Ultraprocessados, fast-food, frituras, queijos em excesso. Refrigerante, álcool. Dieta rica em carnes e pobre em fibras. Fibras sem hidratação adequada.',
+    },
+    mucosite: {
+      titulo: '👄 ORIENTAÇÃO ESPECÍFICA — MUCOSITE',
+      cor: '#B45309',
+      indicados: 'Água fria e gelada em pequenos goles. Gelatina, picolé, sorvete pasteurizado, iogurte pasteurizado. Vitamina de banana, leite pasteurizado se tolerado. Mingau, purê de batata/mandioquinha/abóbora, creme de legumes, sopa cremosa morna, caldo morno. Macarrão e arroz bem cozidos. Ovo mexido bem cozido e macio. Frango desfiado com caldo, peixe macio, queijo pasteurizado macio. Pudim, creme. Banana madura, maçã e pera cozidas.',
+      evitar: 'Limão, laranja, abacaxi, acerola, maracujá ácido, tomate ácido, vinagre. Pimenta e temperos fortes. Álcool, refrigerante, café quente, bebidas muito quentes. Torradas duras, farofa seca, chips, castanhas duras, amendoim inteiro, biscoitos duros. Carnes secas ou muito fibrosas, alimentos crocantes, muito salgados ou condimentados.',
+    },
+    caquexia: {
+      titulo: '⚖️ ORIENTAÇÃO ESPECÍFICA — PERDA DE PESO / CAQUEXIA',
+      cor: '#7C3AED',
+      indicados: 'Vitamina de banana com leite integral, com aveia e pasta de amendoim. Mingau com leite integral, enriquecido com leite em pó. Iogurte integral pasteurizado, iogurte com aveia. Leite integral, leite em pó nas preparações. Queijo pasteurizado, ovos bem cozidos, omelete. Frango desfiado, carne moída bem cozida, peixe. Feijão, lentilha, grão-de-bico. Arroz com feijão, purê com azeite, sopa com frango desfiado, creme de legumes com azeite. Abacate, pasta de amendoim, azeite. Suplemento nutricional oral hiperproteico, whey se liberado.',
+      evitar: 'Dietas restritivas sem indicação, jejum prolongado, dietas detox, sem carboidrato ou sem proteína. Dieta apenas com frutas ou sopas ralas. Caldos sem proteína. Chás e sucos como substitutos de refeição. Alimentos diet/light em excesso. Grandes volumes de salada antes das refeições principais. Bebidas alcoólicas. Suplementos naturais sem liberação da equipe. Megadoses de vitaminas sem indicação.',
+    },
+    constipacao: {
+      titulo: '🌾 ORIENTAÇÃO ESPECÍFICA — CONSTIPAÇÃO',
+      cor: '#15803D',
+      indicados: 'Água, água de coco. Suco de ameixa. Mamão, ameixa, abacate, pera e maçã com casca higienizada. Aveia, farelo de aveia, chia hidratada, linhaça triturada. Feijão, lentilha, grão-de-bico, ervilha. Arroz e pão integrais se tolerados. Verduras cozidas, abóbora, brócolis cozido, couve refogada. Azeite. Iogurte pasteurizado se tolerado.',
+      evitar: 'Baixa ingestão de água, dieta exclusivamente seca. Excesso de pão branco, arroz branco, macarrão simples, bolacha, banana-prata ou verde. Ultraprocessados, fast-food, frituras, queijos em excesso. Refrigerante, álcool. Dieta rica em carnes e pobre em fibras. Fibras sem hidratação adequada.',
+    },
+  };
+
+  var html = '<div style="margin-top:14px;border-top:2px solid #CBD5E1;padding-top:10px">';
+  html += '<div style="font-size:10pt;font-weight:bold;color:#475569;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Orientações específicas para os sintomas referidos</div>';
+
+  sintomas.forEach(function(s){
+    var d = DIETAS[s];
+    if (!d) return;
+    html += '<div style="margin-bottom:10px;border:1.5px solid #CBD5E1;border-radius:6px;overflow:hidden">'
+      + '<div style="background:' + d.cor + ';color:#fff;padding:6px 12px;font-size:10.5pt;font-weight:bold">' + d.titulo + '</div>'
+      + '<div style="padding:8px 12px">'
+      +   '<div style="font-size:9pt;font-weight:bold;color:#15803D;margin-bottom:2px">✅ Indicados:</div>'
+      +   '<div style="font-size:9pt;color:#0D1B3E;line-height:1.4;margin-bottom:6px">' + d.indicados + '</div>'
+      +   '<div style="font-size:9pt;font-weight:bold;color:#B91C1C;margin-bottom:2px">❌ Evitar:</div>'
+      +   '<div style="font-size:9pt;color:#0D1B3E;line-height:1.4">' + d.evitar + '</div>'
+      + '</div>'
+      + '</div>';
+  });
+
+  html += '</div>';
+  return html;
+}
+
+
+
+// ════════════════════════════════
+// COPY
+// ════════════════════════════════
+function cpText(txt) {
+  navigator.clipboard.writeText(txt).then(showToast).catch(function(){
+    var ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta); showToast();
+  });
+}
+function copyRes()    { cpText(document.getElementById('resBody').textContent); }
+function copyPayload(){ cpText(document.getElementById('payloadBody').textContent); }
+function copyDocLab() { cpText(document.getElementById('labDocBody').textContent); }
+function copyDocRet() { cpText(document.getElementById('retDocBody').textContent); }
+function copyDocMed() { cpText(document.getElementById('medDocBody').textContent); }
+function showToast() {
+  var t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2200);
+}
+
+// ════════════════════════════════
+// CONCLUIR CONSULTA — RESET TOTAL
+// ════════════════════════════════
+function concluirConsulta() {
+  // Incrementa contador e zera timer
+  patientCounter = patientCounter + 1;
+  consultStart = new Date();
+
+  // ZERA todos os campos de texto/número
+  ['nome','idade','ciclo','medCont','pa_sis','pa_dia','spo2','fc','obs','protoCustom','labDate'].forEach(function(id){
+    var e = document.getElementById(id);
+    if (e) e.value = '';
+  });
+
+  // Zera variáveis de estado
+  protoVal = '';
+  protoIsPoly = false;
+  ecogVal = null;
+  conclusao = null;
+  atbUso = null;
+  internacaoVal = null;
+  negaSintomas = false;
+  retDiasVal = null;
+  TOX.forEach(function(t){ tSel[t.k] = null; tDias[t.k] = null; });
+  LAB.forEach(function(l){ lSel[l.k] = null; });
+  ALARMES.forEach(function(a){ alarmeSel[a.k] = false; });
+
+  // Remove TODAS as classes "on" de botões
+  var allBtns = document.querySelectorAll('.proto-pill, .cbtn, .ret-btn, .ecog-item, .gb');
+  for (var i = 0; i < allBtns.length; i++) {
+    allBtns[i].classList.remove('on');
+  }
+  document.getElementById('atbSim').classList.remove('on-sim');
+  document.getElementById('atbNao').classList.remove('on-nao');
+  var negaBox = document.getElementById('negaSintomasBox');
+  if (negaBox) {
+    negaBox.style.background = '#F0FDF4';
+    negaBox.style.borderColor = '#86EFAC';
+    negaBox.querySelector('div').firstElementChild.style.color = '#15803D';
+    var sd = negaBox.querySelectorAll('div div')[1];
+    if (sd) sd.style.color = '#166534';
+  }
+  ['intNega','intMenor7','intMaior7'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) { el.classList.remove('on-sim'); el.classList.remove('on-nao'); }
+  });
+
+  // Esconde painéis dinâmicos
+  document.getElementById('protoInputRow').style.display = 'none';
+  document.getElementById('conductaWrap').style.display = 'none';
+  document.getElementById('alarmeResumo').style.display = 'none';
+
+  // Reset resumo
+  document.getElementById('resBody').textContent = 'Preencha as páginas anteriores.';
+  updatePayloadPreview();
+
+  // Reset header
+  document.getElementById('hdrPt').textContent = 'Novo Paciente';
+  document.getElementById('hdrCount').textContent = 'Paciente ' + patientCounter;
+
+  // Re-renderiza listas (apaga as marcações on)
+  renderProtos();
+  renderTox();
+  renderLab();
+  renderAlarmes();
+  buildLabDoc();
+  buildRetDoc();
+  buildMedDoc();
+  updateLabDateInfo();
+
+  // Força volta à página 0
+  for (var j = 0; j < 4; j++) {
+    var pg = document.getElementById('page' + j);
+    if (pg) pg.classList.remove('active');
+  }
+  curP = 0;
+  document.getElementById('page0').classList.add('active');
+  updSteps();
+  updNav();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Foca no campo nome
+  setTimeout(function(){
+    var n = document.getElementById('nome');
+    if (n) { n.focus(); }
+  }, 150);
+}
+
+// ════════════════════════════════
+// AUTO-AVANÇO
+// ════════════════════════════════
+function focusNext(id) {
+  setTimeout(function(){
+    var el = document.getElementById(id);
+    if (el) { el.focus(); if (el.select) el.select(); }
+  }, 100);
+}
+
+// ════════════════════════════════
+// INIT
+// ════════════════════════════════
+function init() {
+  renderProtos();
+  renderTox();
+  renderLab();
+  renderAlarmes();
+  buildLabDoc();
+  buildRetDoc();
+  buildMedDoc();
+  updatePayloadPreview();
+  updNav();
+
+  // Eventos de input
+  document.getElementById('nome').addEventListener('input', function(){
+    var n = this.value.trim().split(' ')[0] || 'Novo Paciente';
+    document.getElementById('hdrPt').textContent = n;
+    autoConduta(); buildResumo();
+  });
+  document.getElementById('nome').addEventListener('blur', function(){
+    if (this.value.trim().length >= 2) focusNext('idade');
+  });
+
+  document.getElementById('idade').addEventListener('input', function(){
+    if (this.value.length >= 2) focusNext('ciclo');
+    autoConduta(); buildResumo();
+  });
+
+  document.getElementById('ciclo').addEventListener('input', function(){
+    if (this.value.length >= 1) {
+      // Não força avanço — usuário pode digitar ciclo de 2 dígitos
+    }
+    buildResumo();
+  });
+  document.getElementById('ciclo').addEventListener('blur', function(){
+    if (this.value.trim()) focusNext('medCont');
+  });
+  document.getElementById('medCont').addEventListener('input', buildResumo);
+
+  document.getElementById('pa_sis').addEventListener('input', function(){
+    if (this.value.length >= 3) focusNext('pa_dia');
+    buildResumo();
+  });
+
+  document.getElementById('pa_dia').addEventListener('input', function(){
+    if (this.value.length >= 2) focusNext('spo2');
+    buildResumo();
+  });
+
+  document.getElementById('spo2').addEventListener('input', function(){
+    if (this.value.length >= 2) focusNext('fc');
+    buildResumo();
+  });
+
+  document.getElementById('fc').addEventListener('input', buildResumo);
+  document.getElementById('obs').addEventListener('input', buildResumo);
+  document.getElementById('labDate').addEventListener('change', updateLabDateInfo);
+  document.getElementById('labDate').addEventListener('input', updateLabDateInfo);
+  document.getElementById('protoCustom').addEventListener('input', function(){
+    protoVal = this.value.trim();
+    autoConduta(); buildResumo();
+  });
+
+  // Timer atualiza a cada segundo
+  setInterval(updateTimer, 1000);
+  updateTimer();
+}
+
+init();
+</script>
+</body>
+</html>
