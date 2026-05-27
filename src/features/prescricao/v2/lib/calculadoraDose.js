@@ -27,6 +27,24 @@ export const DOSE_CUMULATIVA_MAXIMA = {
   mitomicina:     { maxMgM2: 60,   aviso80pct: 48,  unidade: 'mg/m²', referencia: 'SOnHe 2024' },
 };
 
+/**
+ * Aliases de nomes de fármacos para dose cumulativa.
+ * Protege contra variações ortográficas (inglês/comercial vs. português).
+ * BUG-17: 'doxorubicina' (inglês) não batia com 'doxorrubicina' no mapa.
+ */
+export const ALIAS_FARMACO_CUMULATIVO = {
+  'doxorubicina':   'doxorrubicina',
+  'doxo':           'doxorrubicina',
+  'adriamicina':    'doxorrubicina',
+  'epirubicina':    'epirrubicina',
+  'epi':            'epirrubicina',
+  'daunorubicina':  'daunorrubicina',
+  'mitoxantrone':   'mitoxantrona',
+  'mitomycin':      'mitomicina',
+  'mitomycin c':    'mitomicina',
+  'bleo':           'bleomicina',
+};
+
 // ── SUPERFÍCIE CORPORAL (BSA) ──────────────────────────────────────────────────
 
 /**
@@ -190,7 +208,8 @@ export function calcCalvertSafe(auc, crclMlMin) {
  */
 export function calcDoseFarmaco(farmaco, params) {
   const { doseValor, doseUnidade } = farmaco;
-  const { bsa, pesoKg, crclMlMin = 60, reducaoPct = 0 } = params;
+  // BUG-12 fix: sem default para crclMlMin — null/undefined dispara erro explícito no case AUC
+  const { bsa, pesoKg, crclMlMin, reducaoPct = 0 } = params;
   const avisos = [];
   let doseCalculada = null;
   let unidadeFinal = 'mg';
@@ -205,10 +224,18 @@ export function calcDoseFarmaco(farmaco, params) {
   try {
     switch (doseUnidade) {
       case 'mg/m²':
-        if (!bsa) throw new Error('BSA obrigatório para mg/m²');
-        doseCalculada = parseFloat((doseValor * bsa * fatorReducao).toFixed(1));
+      case 'mg/m2': {
+        // BUG-13 fix: revalidar BSA contra limites de segurança mesmo que calculada corretamente
+        const bsaNum = Number(bsa);
+        if (!bsa || !Number.isFinite(bsaNum) || bsaNum < BSA_MIN_M2 || bsaNum > BSA_MAX_M2) {
+          throw new Error(
+            `BSA inválida para cálculo SC: ${bsa} m² — esperado ${BSA_MIN_M2}–${BSA_MAX_M2} m²`
+          );
+        }
+        doseCalculada = parseFloat((doseValor * bsaNum * fatorReducao).toFixed(1));
         unidadeFinal = 'mg';
         break;
+      }
 
       case 'mg/kg':
         if (!pesoKg) throw new Error('Peso obrigatório para mg/kg');
@@ -217,8 +244,13 @@ export function calcDoseFarmaco(farmaco, params) {
         break;
 
       case 'AUC':
-        if (crclMlMin === null || crclMlMin === undefined) throw new Error('ClCr obrigatório para AUC (Calvert)');
-        doseCalculada = calcCalvert(doseValor, crclMlMin);
+        // BUG-12 fix: sem default — null/undefined → erro explícito. Nunca assumir ClCr 60.
+        if (crclMlMin === null || crclMlMin === undefined || !Number.isFinite(Number(crclMlMin))) {
+          throw new Error(
+            'ClCr OBRIGATÓRIO para cálculo de Calvert — coletar creatinina sérica e calcular ClCr'
+          );
+        }
+        doseCalculada = calcCalvert(doseValor, Number(crclMlMin));
         if (fatorReducao < 1) {
           doseCalculada = Math.round(doseCalculada * fatorReducao / 10) * 10;
           avisos.push('Redução de dose aplicada sobre resultado de Calvert — revisar com farmácia');
@@ -237,10 +269,27 @@ export function calcDoseFarmaco(farmaco, params) {
 
       case 'UI':
       case 'U':
-        doseCalculada = doseValor; // bleomicina em U — não calcula por BSA
+        // BUG-14 fix: aplicar fatorReducao também em UI (bleomicina)
+        doseCalculada = parseFloat((doseValor * fatorReducao).toFixed(1));
         unidadeFinal = 'UI';
+        if (fatorReducao < 1) {
+          avisos.push('Redução de dose aplicada sobre UI — confirmar com farmácia (dose não baseada em BSA)');
+        }
         avisos.push('Bleomicina/similar: verificar dose cumulativa total de UI antes de prescrever');
         break;
+
+      case 'mg/m²/dia':
+      case 'mg/m2/dia': {
+        // BUG-06 / CLINIC-02: temozolomida e similares com dose diária por SC
+        const bsaNum2 = Number(bsa);
+        if (!bsa || !Number.isFinite(bsaNum2) || bsaNum2 < BSA_MIN_M2 || bsaNum2 > BSA_MAX_M2) {
+          throw new Error(`BSA inválida para cálculo mg/m²/dia: ${bsa} m²`);
+        }
+        doseCalculada = parseFloat((doseValor * bsaNum2 * fatorReducao).toFixed(1));
+        unidadeFinal = 'mg/dia';
+        avisos.push('Dose diária calculada — confirmar número de dias e dose total do ciclo com protocolo fonte');
+        break;
+      }
 
       default:
         avisos.push(`Unidade "${doseUnidade}" não mapeada — dose não calculada automaticamente`);
@@ -266,7 +315,9 @@ export function calcDoseFarmaco(farmaco, params) {
  * @returns {{ nivel: 'ok'|'aviso'|'critico', mensagem: string, totalMgM2: number|null }}
  */
 export function verificarDoseCumulativa(nomeFarmacoNormalizado, dosePorCicloMg, doseJaAdministradaMg, bsa) {
-  const limite = DOSE_CUMULATIVA_MAXIMA[nomeFarmacoNormalizado];
+  // BUG-17 fix: resolver alias internamente — função é pública e pode receber variantes ortográficas
+  const nomeResolvido = ALIAS_FARMACO_CUMULATIVO[nomeFarmacoNormalizado] || nomeFarmacoNormalizado;
+  const limite = DOSE_CUMULATIVA_MAXIMA[nomeResolvido];
   if (!limite) {
     return { nivel: 'ok', mensagem: '', totalMgM2: 0 };
   }
@@ -363,7 +414,9 @@ export function calcProtocoloCompleto(protocolo, paciente) {
 
     // Verificar dose cumulativa
     let cumCheck = { nivel: 'ok', mensagem: '' };
-    const nomeNorm = (farmaco.farmaco || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    // BUG-17 fix: resolver aliases antes de buscar no mapa (ex: 'doxorubicina' → 'doxorrubicina')
+    const nomeRaw = (farmaco.farmaco || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const nomeNorm = ALIAS_FARMACO_CUMULATIVO[nomeRaw] || nomeRaw;
     const previo = (paciente.dosesCumulativas || {})[nomeNorm] || 0;
     if (resultado.doseCalculada !== null && resultado.doseCalculada !== undefined) {
       cumCheck = verificarDoseCumulativa(nomeNorm, resultado.doseCalculada, previo, bsa);

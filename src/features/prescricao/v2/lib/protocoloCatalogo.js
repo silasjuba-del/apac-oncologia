@@ -6,10 +6,21 @@
 // NÃO conecta ao APACApp diretamente — sem integração nesta versão.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const VERSAO_CATALOGO = 'qt-protocol-catalog-revisado-v0.2';
+export const VERSAO_CATALOGO_V02 = 'qt-protocol-catalog-revisado-v0.2';
+export const VERSAO_CATALOGO_V03 = 'qt-protocol-catalog-curado-v0.3';
 
-// Status prescritíveis (nunca 'aprovado' no v0.2 — ainda não existe)
-export const STATUS_PRESCRITIVEL = ['draft', 'revisao_medica'];
+// Manter alias legado para compatibilidade interna
+export const VERSAO_CATALOGO = VERSAO_CATALOGO_V02;
+
+// BUG-04 fix: removido 'draft' de STATUS_PRESCRITIVEL.
+// 'draft' = nunca entrou em revisão — visível com aviso mas NÃO prescritível.
+// 'revisao_medica' = em revisão — prescritível com CRM obrigatório.
+// 'aprovado' = aprovado formalmente — ainda não existe no catálogo v0.3.
+export const STATUS_PRESCRITIVEL = ['revisao_medica', 'aprovado'];
+
+// Visible com aviso amarelo — não filtrado da lista, mas com badge de alerta
+export const STATUS_VISIVEL_COM_AVISO = ['draft'];
+
 export const STATUS_BLOQUEADO = ['bloqueado', 'quarentena_fragmento_pdf', 'excluido_nao_qt_pura'];
 
 /**
@@ -23,6 +34,54 @@ export const STATUS_BLOQUEADO = ['bloqueado', 'quarentena_fragmento_pdf', 'exclu
  * @param {Object} raw - conteúdo do JSON v0.2
  * @returns {{ ok: boolean, protocolos: Object[], erros: string[], versao: string }}
  */
+/**
+ * Normaliza um protocolo do schema v0.3 para o formato interno do módulo.
+ * O módulo (calculadoraDose, validacoesSeguranca, Steps) espera os campos v0.2.
+ *
+ * Mapeamento principal:
+ *   v0.3 nomeExibicao/nomeCanonico → nome
+ *   v0.3 tumores[]                 → tumorContexto (join)
+ *   v0.3 farmacos[]                → farmacosDetectados[] + doseEstruturada[]
+ *   v0.3 cicloDias                 → periodicidadeExtraida
+ *   v0.3 cid10Sugeridos            → cids
+ *   v0.3 fonteV02Ids               → fonteIds (referência)
+ */
+function normalizarProtocoloV3(p) {
+  const farmacos = p.farmacos || [];
+
+  return {
+    ...p,
+    // Nome para exibição
+    nome: p.nomeExibicao || p.nomeCanonico || p.id,
+
+    // Contexto de tumor (v0.2 usa string; v0.3 usa array)
+    tumorContexto: (p.tumores || [])
+      .map(t => t.replace(/_revisar$/, ' ⚠️').replace(/_/g, ' '))
+      .join(', ') || 'Contexto não especificado',
+
+    // farmacosDetectados: extraído de farmacos[].nome
+    farmacosDetectados: farmacos.map(f => f.nome).filter(Boolean),
+
+    // doseEstruturada: cada entrada precisa do campo 'farmaco' (alias de 'nome')
+    // calculadoraDose.js usa farmaco.farmaco como label do fármaco
+    doseEstruturada: farmacos.map(f => ({
+      ...f,
+      farmaco: f.farmaco || f.nome,  // garante campo 'farmaco' esperado pelo calculador
+    })),
+
+    // Periodicidade legível
+    periodicidadeExtraida: p.periodicidadeExtraida
+      || (p.cicloDias ? `A cada ${p.cicloDias} dias` : undefined),
+
+    // BUG-01 fix: array vazio [] é falsy → usaria cid10Sugeridos não curados como fallback.
+    // cids = [] = "nenhum CID operacional definido", não é fallback para cid10Sugeridos.
+    cids: Array.isArray(p.cids) && p.cids.length > 0 ? p.cids : (p.cid10Sugeridos || []),
+
+    // Versão do catálogo de origem
+    versaoCatalogo: p.versaoCatalogo || 'v0.3',
+  };
+}
+
 export function carregarCatalogo(raw) {
   const erros = [];
 
@@ -30,30 +89,54 @@ export function carregarCatalogo(raw) {
     return { ok: false, protocolos: [], erros: ['Catálogo não fornecido'], versao: '' };
   }
 
-  if (!raw.schemaVersion?.includes('v0.2') && !raw.schemaVersion?.includes('revisado')) {
-    erros.push(`Versão do catálogo não reconhecida: "${raw.schemaVersion}". Esperado: "${VERSAO_CATALOGO}"`);
+  const sv = raw.schemaVersion || '';
+  // BUG-03 fix: detecção estrita por versão — não usar 'curado' (substring genérica)
+  const isV3 = sv === VERSAO_CATALOGO_V03 || sv.includes('v0.3');
+  const isV2 = sv === VERSAO_CATALOGO_V02 || sv.includes('v0.2') || sv.includes('revisado');
+
+  if (!isV2 && !isV3) {
+    erros.push(`Versão do catálogo não reconhecida: "${sv}". Suportados: v0.2, v0.3`);
   }
 
   if (!Array.isArray(raw.protocolos)) {
-    return { ok: false, protocolos: [], erros: [...erros, 'Campo protocolos[] ausente no JSON'], versao: raw.schemaVersion };
+    return { ok: false, protocolos: [], erros: [...erros, 'Campo protocolos[] ausente no JSON'], versao: sv };
   }
 
-  const protocolos = raw.protocolos.map(p => ({
-    ...p,
-    // Garantir campos mínimos
-    status:   p.status   || 'draft',
-    revisar:  p.revisar  !== false,
-    versaoCatalogo: p.versaoCatalogo || 'v0.2',
-  }));
+  const protocolos = raw.protocolos.map(p => {
+    const base = isV3 ? normalizarProtocoloV3(p) : p;
+    // BUG-05 fix: status null/vazio → 'bloqueado' com erro, não 'draft' silencioso
+    const statusValidos = [...STATUS_PRESCRITIVEL, ...STATUS_VISIVEL_COM_AVISO, ...STATUS_BLOQUEADO];
+    let statusFinal = base.status;
+    if (!statusFinal || !statusValidos.includes(statusFinal)) {
+      erros.push(`Protocolo ${base.id || '?'}: status inválido "${base.status}" → bloqueado preventivamente`);
+      statusFinal = 'bloqueado';
+    }
+
+    // BUG-02 fix: expor cid10Bloqueados como Set para verificação rápida em runtime
+    const cid10BloqueadosSet = new Set(
+      (base.cid10Bloqueados || []).map(b => (typeof b === 'string' ? b : b?.cid)).filter(Boolean)
+    );
+
+    return {
+      ...base,
+      status:          statusFinal,
+      revisar:         base.revisar !== false,
+      versaoCatalogo:  base.versaoCatalogo || (isV3 ? 'v0.3' : 'v0.2'),
+      cid10BloqueadosSet,  // Set<string> — use em validações de CID do paciente
+    };
+  });
 
   return {
     ok: erros.length === 0,
     protocolos,
     erros,
-    versao: raw.schemaVersion,
-    geradoEm: raw.geradoEm,
-    revisadoEm: raw.revisadoEm,
-    totalOriginal: raw.estatisticasV02?.totalProtocolos || protocolos.length,
+    versao: sv,
+    schemaV3: isV3,
+    geradoEm: raw.geradoEm || raw.generatedAt,
+    revisadoEm: raw.revisadoEm || raw.lastSafetyAuditAt,
+    totalOriginal: raw.estatisticasV02?.totalProtocolos
+      || raw.auditoriaSeguranca?.totalProtocolos
+      || protocolos.length,
   };
 }
 
