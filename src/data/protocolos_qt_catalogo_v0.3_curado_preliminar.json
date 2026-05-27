@@ -1,0 +1,1199 @@
+{
+  "schemaVersion": "qt-protocol-catalog-curado-v0.3",
+  "status": "curado_preliminar_nao_integrar_sem_auditoria_claude_e_revisao_medica",
+  "generatedAt": "2026-05-27T10:18:40.940Z",
+  "encodingPolicy": "ascii_safe_for_machine_catalog; UI can render accents separately",
+  "origem": {
+    "baseAnterior": "C:/Users/silas/OneDrive/?rea de Trabalho/protocolos_qt_catalogo_v0.2_revisao.json",
+    "fontesPdf": [
+      "C:/Users/silas/OneDrive/?rea de Trabalho/Protocolos-SOnHe-2024-Modelo-7.pdf",
+      "C:/Users/silas/OneDrive/?rea de Trabalho/PROTOCOLOS-DE-ONCOLOGIA-Sv-Sau-EB.pdf"
+    ]
+  },
+  "decisaoArquitetural": [
+    "v0.3 reduz o escopo para protocolos comuns e estruturados.",
+    "Nao tenta aproveitar os 170 drafts diretamente.",
+    "Nenhum protocolo esta aprovado.",
+    "Protocolos bloqueados ficam visiveis apenas para auditoria, nao para prescricao.",
+    "A integracao futura deve aceitar apenas status aprovado e prescricaoPermitida true."
+  ],
+  "segurancaGlobal": {
+    "barreirasAntropometricas": {
+      "pesoKgSoftMin": 30,
+      "pesoKgSoftMax": 120,
+      "alturaCmSoftMin": 150,
+      "alturaCmSoftMax": 200,
+      "regra": "Fora da faixa nao bloqueia automaticamente, mas exige confirmacao explicita do medico."
+    },
+    "statusPermitidos": [
+      "revisao_medica",
+      "bloqueado"
+    ],
+    "proibido": [
+      "prescricao automatica",
+      "status aprovado sem revisao medica documentada",
+      "calculo de dose sem peso e altura confirmados",
+      "carboplatina sem creatinina/ClCr confirmada",
+      "antraciclina sem avaliar dose cumulativa e FEVE quando aplicavel"
+    ]
+  },
+  "protocolos": [
+    {
+      "id": "qt-curado-v03-capox-colon-reto",
+      "nomeCanonico": "CAPOX",
+      "nomeExibicao": "CAPOX - Capecitabina + Oxaliplatina",
+      "status": "revisao_medica",
+      "prescricaoPermitida": false,
+      "motivoStatus": "Catalogo curado preliminar. Exige auditoria Claude e revisao medica antes de liberar.",
+      "fonteV02Ids": [
+        "qt-sonhe-2024-0055",
+        "qt-sonhe-2024-0069",
+        "qt-sonhe-2024-0091"
+      ],
+      "tumores": [
+        "colon",
+        "reto",
+        "vias_biliares_revisar"
+      ],
+      "cid10Sugeridos": [
+        "C18",
+        "C19",
+        "C20",
+        "C22",
+        "C23",
+        "C24"
+      ],
+      "intencoesPermitidas": [
+        "adjuvante",
+        "paliativo"
+      ],
+      "linha": [
+        "1",
+        "posterior_revisar"
+      ],
+      "cicloDias": 21,
+      "ciclosPadrao": {
+        "adjuvante": [
+          4,
+          6,
+          8
+        ],
+        "paliativo": [
+          "ate_progressao_ou_toxicidade"
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Oxaliplatina",
+          "classe": "citotoxico",
+          "doseValor": 130,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": "SG 5%",
+          "volumeMl": 500,
+          "tempoMin": 120,
+          "calculo": "SC",
+          "observacao": ""
+        },
+        {
+          "nome": "Capecitabina",
+          "classe": "citotoxico",
+          "doseValor": 1000,
+          "doseUnidade": "mg/m2",
+          "via": "VO",
+          "dias": [
+            "D1-D14"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": "Frequencia separada da unidade para preservar enum de dose. Ajustar conforme funcao renal e tolerancia.",
+          "frequencia": "12/12h",
+          "posologia": "1000 mg/m2 VO 12/12h D1-D14"
+        }
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_renal",
+        "funcao_hepatica",
+        "neuropatia_periferica"
+      ],
+      "alertas": [
+        "Ajustar capecitabina conforme funcao renal e tolerancia.",
+        "Confirmar indicacao e duracao conforme tumor/intencao.",
+        "Capecitabina: doseUnidade deve permanecer mg/m2; frequencia/posologia ficam em campos separados."
+      ]
+    },
+    {
+      "id": "qt-curado-v03-mfolfox6-colon-reto",
+      "nomeCanonico": "mFOLFOX6",
+      "nomeExibicao": "FOLFOX - Oxaliplatina + Leucovorina + 5-FU",
+      "status": "revisao_medica",
+      "prescricaoPermitida": false,
+      "fonteV02Ids": [
+        "qt-sonhe-2024-0054",
+        "qt-sonhe-2024-0070",
+        "qt-sonhe-2024-0080"
+      ],
+      "tumores": [
+        "colon",
+        "reto",
+        "gastrointestinal_revisar",
+        "pancreas_revisar"
+      ],
+      "cid10Sugeridos": [
+        "C18",
+        "C19",
+        "C20",
+        "C16",
+        "C25"
+      ],
+      "intencoesPermitidas": [
+        "adjuvante",
+        "paliativo"
+      ],
+      "linha": [
+        "1",
+        "posterior_revisar"
+      ],
+      "cicloDias": 14,
+      "ciclosPadrao": {
+        "adjuvante": [
+          6,
+          12
+        ],
+        "paliativo": [
+          "ate_progressao_ou_toxicidade"
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Oxaliplatina",
+          "classe": "citotoxico",
+          "doseValor": 85,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": "SG 5%",
+          "volumeMl": 500,
+          "tempoMin": 120,
+          "calculo": "SC",
+          "observacao": ""
+        },
+        {
+          "nome": "Leucovorina",
+          "classe": "modulador",
+          "doseValor": 400,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": 120,
+          "calculo": "SC",
+          "observacao": ""
+        },
+        {
+          "nome": "Fluorouracil bolus",
+          "classe": "citotoxico",
+          "doseValor": 400,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": ""
+        },
+        {
+          "nome": "Fluorouracil infusao continua",
+          "classe": "citotoxico",
+          "doseValor": 2400,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1-D2"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": "Bomba de infusao continua 46-48h. NUNCA interpretar 46 como minutos.",
+          "duracaoInfusaoHoras": 46,
+          "tempoInfusao": {
+            "valor": 46,
+            "unidade": "horas",
+            "intervaloAceito": "46-48h"
+          },
+          "infusaoContinua": true
+        }
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_renal",
+        "funcao_hepatica",
+        "neuropatia_periferica"
+      ],
+      "alertas": [
+        "Confirmar se utiliza bolus de 5-FU no protocolo institucional.",
+        "Oxaliplatina: revisar neuropatia e reacao infusional.",
+        "5-FU infusao continua usa duracao em horas; nao usar tempoMin para bomba 46-48h."
+      ],
+      "motivoStatus": "Revisao medica obrigatoria antes de liberar prescricao."
+    },
+    {
+      "id": "qt-curado-v03-folfiri-colon-reto",
+      "nomeCanonico": "FOLFIRI",
+      "nomeExibicao": "FOLFIRI - Irinotecano + Leucovorina + 5-FU",
+      "status": "revisao_medica",
+      "prescricaoPermitida": false,
+      "fonteV02Ids": [
+        "qt-sonhe-2024-0056"
+      ],
+      "tumores": [
+        "colon",
+        "reto"
+      ],
+      "cid10Sugeridos": [
+        "C18",
+        "C19",
+        "C20"
+      ],
+      "intencoesPermitidas": [
+        "paliativo",
+        "posterior_revisar"
+      ],
+      "linha": [
+        "1_revisar",
+        "2",
+        "posterior"
+      ],
+      "cicloDias": 14,
+      "ciclosPadrao": {
+        "paliativo": [
+          "ate_progressao_ou_toxicidade"
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Irinotecano",
+          "classe": "citotoxico",
+          "doseValor": 180,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": 90,
+          "calculo": "SC",
+          "observacao": ""
+        },
+        {
+          "nome": "Leucovorina",
+          "classe": "modulador",
+          "doseValor": 400,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": ""
+        },
+        {
+          "nome": "Fluorouracil bolus",
+          "classe": "citotoxico",
+          "doseValor": 400,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": ""
+        },
+        {
+          "nome": "Fluorouracil infusao continua",
+          "classe": "citotoxico",
+          "doseValor": 2400,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1-D2"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": "Bomba de infusao continua 46-48h. NUNCA interpretar 46 como minutos.",
+          "duracaoInfusaoHoras": 46,
+          "tempoInfusao": {
+            "valor": 46,
+            "unidade": "horas",
+            "intervaloAceito": "46-48h"
+          },
+          "infusaoContinua": true
+        }
+      ],
+      "premedicacoesEspecificas": [
+        "Atropina SC se sindrome colinergica por irinotecano conforme rotina medica."
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_hepatica",
+        "diarreia_basal",
+        "bilirrubina"
+      ],
+      "alertas": [
+        "Irinotecano: risco de diarreia precoce/tardia; revisar bilirrubina e performance.",
+        "5-FU infusao continua usa duracao em horas; nao usar tempoMin para bomba 46-48h."
+      ],
+      "motivoStatus": "Revisao medica obrigatoria antes de liberar prescricao."
+    },
+    {
+      "id": "qt-curado-v03-carbo-pacli-q21",
+      "nomeCanonico": "CARBOPLATINA_PACLITAXEL_Q21",
+      "nomeExibicao": "Carboplatina + Paclitaxel a cada 21 dias",
+      "status": "revisao_medica",
+      "prescricaoPermitida": false,
+      "fonteV02Ids": [
+        "qt-sonhe-2024-0010",
+        "qt-sonhe-2024-0022",
+        "qt-sonhe-2024-0045",
+        "qt-sonhe-2024-0134",
+        "qt-sonhe-2024-0178"
+      ],
+      "tumores": [
+        "ovario",
+        "endometrio",
+        "pulmao",
+        "sitio_primario_oculto"
+      ],
+      "cid10Sugeridos": [
+        "C56",
+        "C54",
+        "C34",
+        "C80"
+      ],
+      "intencoesPermitidas": [
+        "adjuvante",
+        "paliativo",
+        "perioperatorio_revisar"
+      ],
+      "linha": [
+        "1",
+        "posterior_revisar"
+      ],
+      "cicloDias": 21,
+      "ciclosPadrao": {
+        "adjuvante": [
+          4,
+          6
+        ],
+        "paliativo": [
+          "ate_progressao_ou_toxicidade"
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Carboplatina",
+          "classe": "citotoxico",
+          "doseValor": 5,
+          "doseUnidade": "AUC",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "Calvert",
+          "observacao": "AUC padrao inicial 5. Medico deve confirmar/editar AUC 5-6 antes do calculo de Calvert conforme indicacao, linha, funcao renal e toxicidade previa.",
+          "dosePadrao": 5,
+          "doseMin": 5,
+          "doseMax": 6,
+          "aucEditavelPeloMedico": true,
+          "requerConfirmacaoAUC": true
+        },
+        {
+          "nome": "Paclitaxel",
+          "classe": "citotoxico",
+          "doseValor": 175,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": 180,
+          "calculo": "SC",
+          "observacao": ""
+        }
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "creatinina",
+        "clcr",
+        "hemograma",
+        "funcao_hepatica",
+        "neuropatia_periferica"
+      ],
+      "alertas": [
+        "Carboplatina exige creatinina/ClCr e AUC editavel.",
+        "Paclitaxel exige premedicacao anti-hipersensibilidade conforme rotina.",
+        "Carboplatina: bloquear calculo ate confirmacao explicita da AUC pelo medico."
+      ]
+    },
+    {
+      "id": "qt-curado-v03-ac-mama",
+      "nomeCanonico": "AC",
+      "nomeExibicao": "AC - Doxorrubicina + Ciclofosfamida",
+      "status": "revisao_medica",
+      "prescricaoPermitida": false,
+      "fonteV02Ids": [
+        "qt-sonhe-2024-0002",
+        "qt-sonhe-2024-0004"
+      ],
+      "tumores": [
+        "mama"
+      ],
+      "cid10Sugeridos": [
+        "C50"
+      ],
+      "intencoesPermitidas": [
+        "neoadjuvante",
+        "adjuvante"
+      ],
+      "linha": [
+        "1"
+      ],
+      "cicloDias": 21,
+      "ciclosPadrao": {
+        "neoadjuvante": [
+          4
+        ],
+        "adjuvante": [
+          4
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Doxorrubicina",
+          "classe": "citotoxico",
+          "doseValor": 60,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": "SF 0,9%",
+          "volumeMl": 100,
+          "tempoMin": 15,
+          "calculo": "SC",
+          "observacao": "Antraciclina vesicante: rastrear dose cumulativa, FEVE quando aplicavel e risco de extravasamento.",
+          "tempoMinFaixaAceita": [
+            15,
+            30
+          ],
+          "administracaoInstitucional": "Infusao EV lenta/diluida em 15-30 min; alternativa push lento 3-5 min exige padrao institucional explicito.",
+          "doseCumulativaMaxMgM2": 450,
+          "vesicante": true
+        },
+        {
+          "nome": "Ciclofosfamida",
+          "classe": "citotoxico",
+          "doseValor": 600,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": ""
+        }
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_hepatica",
+        "feve_quando_aplicavel",
+        "dose_cumulativa_antraciclina"
+      ],
+      "alertas": [
+        "Bloquear se dose cumulativa de doxorrubicina exceder limite institucional.",
+        "Confirmar FEVE conforme risco e rotina.",
+        "Doxorrubicina: tempo/diluicao definidos como padrao preliminar bloqueado; confirmar padrao institucional antes de aprovar.",
+        "Doxorrubicina: dose cumulativa maxima estruturada em 450 mg/m2."
+      ]
+    },
+    {
+      "id": "qt-curado-v03-tc-mama",
+      "nomeCanonico": "TC",
+      "nomeExibicao": "TC - Docetaxel + Ciclofosfamida",
+      "status": "revisao_medica",
+      "prescricaoPermitida": false,
+      "fonteV02Ids": [
+        "qt-sonhe-2024-0001"
+      ],
+      "tumores": [
+        "mama"
+      ],
+      "cid10Sugeridos": [
+        "C50"
+      ],
+      "intencoesPermitidas": [
+        "adjuvante",
+        "neoadjuvante_revisar"
+      ],
+      "linha": [
+        "1"
+      ],
+      "cicloDias": 21,
+      "ciclosPadrao": {
+        "adjuvante": [
+          4,
+          6
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Docetaxel",
+          "classe": "citotoxico",
+          "doseValor": 75,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": 60,
+          "calculo": "SC",
+          "observacao": ""
+        },
+        {
+          "nome": "Ciclofosfamida",
+          "classe": "citotoxico",
+          "doseValor": 600,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": ""
+        }
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_hepatica",
+        "neuropatia_periferica"
+      ],
+      "alertas": [
+        "Docetaxel: revisar funcao hepatica, edema, neuropatia e premedicacao com corticoide conforme rotina."
+      ]
+    },
+    {
+      "id": "qt-curado-v03-docetaxel-prostata",
+      "nomeCanonico": "DOCETAXEL_PROSTATA",
+      "nomeExibicao": "Docetaxel para prostata",
+      "status": "revisao_medica",
+      "prescricaoPermitida": false,
+      "fonteV02Ids": [
+        "qt-sonhe-2024-0102",
+        "qt-sonhe-2024-0103"
+      ],
+      "tumores": [
+        "prostata"
+      ],
+      "cid10Sugeridos": [
+        "C61"
+      ],
+      "intencoesPermitidas": [
+        "paliativo",
+        "sensivel_castracao_revisar",
+        "resistente_castracao_revisar"
+      ],
+      "linha": [
+        "1",
+        "posterior_revisar"
+      ],
+      "cicloDias": 21,
+      "ciclosPadrao": {
+        "padrao": [
+          6
+        ],
+        "paliativo": [
+          "ate_progressao_ou_toxicidade"
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Docetaxel",
+          "classe": "citotoxico",
+          "doseValor": 75,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": 60,
+          "calculo": "SC",
+          "observacao": ""
+        },
+        {
+          "nome": "Prednisona",
+          "classe": "co_medicacao_obrigatoria",
+          "doseValor": 5,
+          "doseUnidade": "mg",
+          "via": "VO",
+          "dias": [
+            "continuo"
+          ],
+          "frequencia": "12/12h",
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "fixo",
+          "dispensacaoFarmacia": true,
+          "observacao": "Parte obrigatoria do protocolo docetaxel prostata; dispensar junto quando indicado e validado pelo medico. reducaoNaoAplicavel:true — dose fixa independente de reducao de QT.",
+          "reducaoNaoAplicavel": true
+        }
+      ],
+      "coMedicacoes": [],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_hepatica",
+        "neuropatia_periferica",
+        "psa",
+        "castracao_vigente_quando_aplicavel"
+      ],
+      "alertas": [
+        "Distinguir sensivel a castracao versus resistente a castracao.",
+        "Confirmar manutencao de bloqueio androgenico quando indicado.",
+        "Prednisona movida para farmacos como co_medicacao_obrigatoria para aparecer na dispensacao."
+      ]
+    },
+    {
+      "id": "qt-curado-v03-cisplatina-gemcitabina",
+      "nomeCanonico": "CISPLATINA_GEMCITABINA",
+      "nomeExibicao": "Cisplatina + Gemcitabina",
+      "status": "revisao_medica",
+      "prescricaoPermitida": false,
+      "fonteV02Ids": [
+        "qt-sonhe-2024-0095",
+        "qt-sonhe-2024-0137",
+        "qt-sonhe-2024-0155",
+        "qt-sonhe-2024-0179"
+      ],
+      "tumores": [
+        "bexiga",
+        "pulmao"
+      ],
+      "cid10Sugeridos": [
+        "C67",
+        "C34"
+      ],
+      "intencoesPermitidas": [
+        "neoadjuvante",
+        "adjuvante",
+        "paliativo"
+      ],
+      "linha": [
+        "1",
+        "posterior_revisar"
+      ],
+      "cicloDias": 21,
+      "ciclosPadrao": {
+        "neoadjuvante": [
+          4
+        ],
+        "adjuvante": [
+          4
+        ],
+        "paliativo": [
+          "ate_progressao_ou_toxicidade"
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Cisplatina",
+          "classe": "citotoxico",
+          "doseValor": 70,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": 60,
+          "calculo": "SC",
+          "observacao": "Dose varia por tumor/contexto: conferir antes de usar. Nao usar para C22/C23/C24; vias biliares exigem ABC-02 separado. Exige hidratacao pre/pos e funcao renal adequada.",
+          "tempoMinMinimo": 60
+        },
+        {
+          "nome": "Gemcitabina",
+          "classe": "citotoxico",
+          "doseValor": 1000,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1",
+            "D8"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": 30,
+          "calculo": "SC",
+          "observacao": ""
+        }
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_renal",
+        "clcr",
+        "funcao_hepatica",
+        "audicao",
+        "neuropatia_periferica",
+        "hidratacao_cisplatina"
+      ],
+      "alertas": [
+        "Cisplatina exige ClCr adequado, hidratacao e avaliacao de ototoxicidade/neuropatia.",
+        "Nao substituir por carboplatina automaticamente sem decisao medica.",
+        "BLOQUEIO CID: C22/C23/C24 nao devem usar este protocolo; usar variante biliar ABC-02 bloqueada para auditoria.",
+        "Escopo revisado: protocolo restrito a C34/C67/outros solidos sob revisao; vias biliares bloqueadas em ABC-02 separado."
+      ],
+      "cid10Bloqueados": [
+        {
+          "cid": "C22",
+          "motivo": "Vias biliares exigem protocolo especifico ABC-02: cisplatina 25 mg/m2 D1+D8 + gemcitabina 1000 mg/m2 D1+D8."
+        },
+        {
+          "cid": "C23",
+          "motivo": "Vias biliares exigem protocolo especifico ABC-02: cisplatina 25 mg/m2 D1+D8 + gemcitabina 1000 mg/m2 D1+D8."
+        },
+        {
+          "cid": "C24",
+          "motivo": "Vias biliares exigem protocolo especifico ABC-02: cisplatina 25 mg/m2 D1+D8 + gemcitabina 1000 mg/m2 D1+D8."
+        }
+      ],
+      "tumorPrimario": [
+        "pulmonar",
+        "vesical",
+        "outros_solidos"
+      ],
+      "cids": [
+        "C34",
+        "C67"
+      ],
+      "observacaoEscopo": "Escopo explicito para evitar uso como protocolo universal. C22/C23/C24 foram removidos e devem usar a variante biliar ABC-02 bloqueada. C56/ovario removido em 2026-05-27 — protocolo CisGema 70mg/m2 nao e padrao para ovario (usar CarboTaxol)."
+    },
+    {
+      "id": "qt-curado-v03-cisplatina-gemcitabina-biliar-abc02",
+      "nomeCanonico": "CISPLATINA_GEMCITABINA_BILIAR_ABC02",
+      "nomeExibicao": "Cisplatina + Gemcitabina - Vias biliares (ABC-02)",
+      "status": "bloqueado",
+      "prescricaoPermitida": false,
+      "motivoStatus": "Criado por auditoria de seguranca. Bloqueado ate revisao medica/farmaceutica; evita uso indevido do CisGema 70 mg/m2 D1 em C22/C23/C24.",
+      "fonteV02Ids": [],
+      "fonteReferencia": "ABC-02: Valle et al., NEJM 2010; cisplatina 25 mg/m2 + gemcitabina 1000 mg/m2 D1 e D8 a cada 21 dias.",
+      "tumores": [
+        "vias_biliares"
+      ],
+      "cid10Sugeridos": [
+        "C22",
+        "C23",
+        "C24"
+      ],
+      "intencoesPermitidas": [
+        "paliativo"
+      ],
+      "linha": [
+        "1"
+      ],
+      "cicloDias": 21,
+      "ciclosPadrao": {
+        "paliativo": [
+          "ate_progressao_ou_toxicidade"
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Cisplatina",
+          "classe": "citotoxico",
+          "doseValor": 25,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1",
+            "D8"
+          ],
+          "diluente": "SF 0,9%",
+          "volumeMl": 500,
+          "tempoMin": 60,
+          "calculo": "SC",
+          "observacao": "ABC-02: cisplatina 25 mg/m2 D1 e D8. Exige hidratacao pre/pos e funcao renal adequada."
+        },
+        {
+          "nome": "Gemcitabina",
+          "classe": "citotoxico",
+          "doseValor": 1000,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1",
+            "D8"
+          ],
+          "diluente": "SF 0,9%",
+          "volumeMl": 250,
+          "tempoMin": 30,
+          "calculo": "SC",
+          "observacao": "ABC-02: gemcitabina 1000 mg/m2 D1 e D8."
+        }
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_renal",
+        "clcr",
+        "funcao_hepatica",
+        "hidratacao_cisplatina"
+      ],
+      "alertas": [
+        "Protocolo criado apenas para auditoria; prescricao bloqueada.",
+        "Confirmar diagnostico biliar, performance status, funcao renal/hepatica e indicacao paliativa antes de qualquer liberacao futura.",
+        "Nao confundir com CisGema 70 mg/m2 D1 usado em outros contextos."
+      ],
+      "criadoPorAuditoria": true
+    },
+    {
+      "id": "qt-curado-v03-carbo-etoposideo",
+      "nomeCanonico": "CARBOPLATINA_ETOPOSIDEO",
+      "nomeExibicao": "Carboplatina + Etoposideo",
+      "status": "bloqueado",
+      "prescricaoPermitida": false,
+      "motivoStatus": "Bloqueado porque a extracao v0.2 trouxe etoposideo somente D1; confirmar dias D1-D3 e dose no PDF/protocolo institucional.",
+      "fonteV02Ids": [
+        "qt-sonhe-2024-0142"
+      ],
+      "tumores": [
+        "pulmao_pequenas_celulas_revisar",
+        "neuroendocrino_revisar"
+      ],
+      "cid10Sugeridos": [
+        "C34",
+        "C7A"
+      ],
+      "intencoesPermitidas": [
+        "paliativo",
+        "limitado_concomitante_revisar"
+      ],
+      "linha": [
+        "1"
+      ],
+      "cicloDias": 21,
+      "ciclosPadrao": {
+        "padrao": [
+          4,
+          6
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Carboplatina",
+          "classe": "citotoxico",
+          "doseValor": 6,
+          "doseUnidade": "AUC",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "Calvert",
+          "observacao": ""
+        },
+        {
+          "nome": "Etoposideo",
+          "classe": "citotoxico",
+          "doseValor": 120,
+          "doseUnidade": "mg/m2",
+          "via": "EV",
+          "dias": [
+            "D1"
+          ],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": "Dias provavelmente incompletos: validar D1-D3."
+        }
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "creatinina",
+        "clcr",
+        "hemograma",
+        "funcao_hepatica"
+      ],
+      "alertas": [
+        "Nao liberar ate confirmar dose/dias de etoposideo."
+      ]
+    },
+    {
+      "id": "qt-curado-v03-temozolomida",
+      "nomeCanonico": "TEMOZOLOMIDA",
+      "nomeExibicao": "Temozolomida oral",
+      "status": "bloqueado",
+      "prescricaoPermitida": false,
+      "motivoStatus": "Placeholder unico bloqueado e obsoleto: temozolomida concomitante RT e adjuvante Stupp sao regimes distintos. Usar placeholders separados bloqueados para auditoria.",
+      "fonteV02Ids": [],
+      "tumores": [
+        "sistema_nervoso_central_revisar"
+      ],
+      "cid10Sugeridos": [
+        "C71"
+      ],
+      "intencoesPermitidas": [
+        "concomitante_rt_revisar",
+        "adjuvante_revisar",
+        "recidiva_revisar"
+      ],
+      "linha": [
+        "revisar"
+      ],
+      "cicloDias": null,
+      "ciclosPadrao": {},
+      "farmacos": [
+        {
+          "nome": "Temozolomida",
+          "classe": "citotoxico",
+          "doseValor": null,
+          "doseUnidade": "mg/m2",
+          "via": "VO",
+          "dias": [],
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": "Preencher dose/esquema conforme indicacao: concomitante RT versus adjuvante/recidiva."
+        }
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_hepatica",
+        "funcao_renal"
+      ],
+      "alertas": [
+        "Nao prescrever ate definir contexto e dose.",
+        "Nao usar placeholder unico. Selecionar variante concomitante RT ou adjuvante Stupp, ambas bloqueadas ate revisao.",
+        "Placeholder obsoleto: usar as variantes separadas de temozolomida, ambas bloqueadas ate revisao."
+      ],
+      "substituidoPor": [
+        "qt-curado-v03-temozolomida-concomitante-rt",
+        "qt-curado-v03-temozolomida-adjuvante-stupp"
+      ],
+      "obsoletoPorSeguranca": true,
+      "substituido": true,
+      "observacao": "Obsoleto - dividido em temozolomida-concomitante-rt e temozolomida-adjuvante-stupp. Manter bloqueado apenas para rastreabilidade."
+    },
+    {
+      "status": "bloqueado",
+      "prescricaoPermitida": false,
+      "fonteV02Ids": [],
+      "tumores": [
+        "sistema_nervoso_central_revisar"
+      ],
+      "cid10Sugeridos": [
+        "C71"
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_renal",
+        "funcao_hepatica",
+        "avaliar_pneumocystis_conforme_risco"
+      ],
+      "alertas": [
+        "Placeholder bloqueado; revisar contexto, dose, duracao, antiemetico e profilaxias antes de liberar."
+      ],
+      "criadoPorAuditoria": true,
+      "id": "qt-curado-v03-temozolomida-concomitante-rt",
+      "nomeCanonico": "TEMOZOLOMIDA_CONCOMITANTE_RT",
+      "nomeExibicao": "Temozolomida concomitante a radioterapia",
+      "motivoStatus": "Bloqueado: variante criada para separar TMZ concomitante RT do esquema adjuvante Stupp.",
+      "intencoesPermitidas": [
+        "concomitante_radioterapia"
+      ],
+      "linha": [
+        "1"
+      ],
+      "cicloDias": 42,
+      "ciclosPadrao": {
+        "concomitante_radioterapia": [
+          1
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Temozolomida",
+          "classe": "citotoxico",
+          "doseValor": 75,
+          "doseUnidade": "mg/m2/dia",
+          "via": "VO",
+          "dias": [
+            "D1-D42"
+          ],
+          "frequencia": "1x/dia",
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "observacao": "Esquema concomitante RT: 75 mg/m2/dia durante radioterapia. Bloqueado ate revisao institucional."
+        }
+      ]
+    },
+    {
+      "status": "bloqueado",
+      "prescricaoPermitida": false,
+      "fonteV02Ids": [],
+      "tumores": [
+        "sistema_nervoso_central_revisar"
+      ],
+      "cid10Sugeridos": [
+        "C71"
+      ],
+      "requisitosBasais": [
+        "peso_altura_sc",
+        "hemograma",
+        "funcao_renal",
+        "funcao_hepatica",
+        "avaliar_pneumocystis_conforme_risco"
+      ],
+      "alertas": [
+        "Placeholder bloqueado; revisar contexto, dose, duracao, antiemetico e profilaxias antes de liberar."
+      ],
+      "criadoPorAuditoria": true,
+      "id": "qt-curado-v03-temozolomida-adjuvante-stupp",
+      "nomeCanonico": "TEMOZOLOMIDA_ADJUVANTE_STUPP",
+      "nomeExibicao": "Temozolomida adjuvante - Stupp",
+      "motivoStatus": "Bloqueado: variante criada para separar TMZ adjuvante Stupp do esquema concomitante RT.",
+      "intencoesPermitidas": [
+        "adjuvante"
+      ],
+      "linha": [
+        "1"
+      ],
+      "cicloDias": 28,
+      "ciclosPadrao": {
+        "adjuvante": [
+          6
+        ]
+      },
+      "farmacos": [
+        {
+          "nome": "Temozolomida",
+          "classe": "citotoxico",
+          "doseValor": null,
+          "doseMin": 150,
+          "doseMax": 200,
+          "doseUnidade": "mg/m2/dia",
+          "via": "VO",
+          "dias": [
+            "D1-D5"
+          ],
+          "frequencia": "1x/dia",
+          "diluente": null,
+          "volumeMl": null,
+          "tempoMin": null,
+          "calculo": "SC",
+          "doseEditavelPeloMedico": true,
+          "observacao": "Esquema adjuvante Stupp: 150-200 mg/m2/dia D1-D5 q28d. Bloqueado ate revisao institucional."
+        }
+      ]
+    }
+  ],
+  "pendentesPrioritariosAdicionarDepois": [
+    "AC-T sequencial",
+    "ACdd-T",
+    "FEC",
+    "EC",
+    "CMF",
+    "TAC",
+    "Nab-paclitaxel monoterapia",
+    "Gemcitabina monoterapia",
+    "Carboplatina + Gemcitabina",
+    "Carboplatina + Pemetrexede",
+    "Cisplatina + Pemetrexede",
+    "Docetaxel + Gemcitabina",
+    "Carboplatina + Irinotecano",
+    "Carboplatina + Paclitaxel semanal",
+    "Cisplatina semanal concomitante RT"
+  ],
+  "criteriosParaPromoverParaAprovado": [
+    "conferencia manual contra PDF e/ou protocolo institucional",
+    "revisao por medico oncologista documentada",
+    "dose estruturada por farmaco validada",
+    "via e dias de administracao validados",
+    "ciclo e numero de ciclos validados",
+    "requisitos basais definidos",
+    "interacoes e alertas definidos",
+    "teste unitario de calculo de dose criado",
+    "teste de bloqueio APAC/prescricao criado"
+  ],
+  "lastSafetyAuditAt": "2026-05-27T20:43:13.203Z",
+  "auditoriaSeguranca": {
+    "vereditoOriginal": "rejeitar_com_bloqueios_criticos",
+    "prescricaoPermitidaGlobal": false,
+    "aplicadaEm": "2026-05-27",
+    "correcoesAplicadas": [
+      "5-FU infusao continua em FOLFOX/FOLFIRI: removido tempoMin=46 e criada duracaoInfusaoHoras=46 com unidade explicita horas.",
+      "Cisplatina+Gemcitabina: C22/C23/C24 removidos do protocolo compartilhado; criada variante biliar ABC-02 bloqueada.",
+      "CAPOX: capecitabina com doseUnidade enum mg/m2 e frequencia separada 12/12h.",
+      "Carbo+Pacli q21: AUC editavel pelo medico com faixa 5-6; retirada indicacao mama_revisar/C50.",
+      "AC mama: doxorrubicina recebeu tempo de administracao explicito, diluente/volume institucional preliminar e dose cumulativa maxima estruturada.",
+      "Docetaxel prostata: prednisona movida para farmacos como co_medicacao_obrigatoria com dispensacaoFarmacia=true.",
+      "Temozolomida: placeholder unico marcado como substituido por dois placeholders bloqueados (concomitante RT e adjuvante Stupp).",
+      "CisGema original recebeu tumorPrimario/cids explicitos para nao parecer protocolo universal.",
+      "TMZ placeholder recebeu observacao/substituido para explicar divisao em duas variantes bloqueadas."
+    ],
+    "observacao": "Catalogo continua nao aprovado para prescricao. A integracao futura deve filtrar prescricaoPermitida=true e status=aprovado."
+  }
+}

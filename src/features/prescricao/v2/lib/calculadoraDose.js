@@ -45,6 +45,13 @@ export const ALIAS_FARMACO_CUMULATIVO = {
   'bleo':           'bleomicina',
 };
 
+function normalizarNomeFarmaco(valor) {
+  return String(valor || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 // ── SUPERFÍCIE CORPORAL (BSA) ──────────────────────────────────────────────────
 
 /**
@@ -121,8 +128,12 @@ export function calcCrCl(idade, pesoKg, alturaCm, creatinina, sexo) {
     throw new Error(`calcCrCl: sexo deve ser 'M' ou 'F'`);
 
   // Peso ideal (Devine)
+  // BUG-15 fix: Math.max garante alturaExcesso ≥ 0 para pacientes com altura < 152.4 cm.
+  // Sem isso, pacientes obesos de baixa estatura teriam pesoIdeal ≤ 0, a condição
+  // (imc > 30 && pesoIdeal > 0) seria falsa e o ClCr seria calculado com peso real
+  // (superestimando até 2× em casos extremos → superdosagem de carboplatina/cisplatina).
   const alturaM = alturaCm / 100;
-  const alturaExcesso = alturaCm - 152.4;
+  const alturaExcesso = Math.max(alturaCm - 152.4, 0);
   const pesoIdeal =
     sexo === 'M'
       ? 50 + 2.3 * (alturaExcesso / 2.54)
@@ -130,8 +141,8 @@ export function calcCrCl(idade, pesoKg, alturaCm, creatinina, sexo) {
 
   // IMC para decidir qual peso usar
   const imc = pesoKg / (alturaM * alturaM);
-  const pesoUsado =
-    imc > 30 && pesoIdeal > 0 ? Math.max(pesoIdeal, 0) : pesoKg;
+  // pesoIdeal sempre > 0 após fix (mínimo: 50 M / 45.5 F para altura ≤ 152.4 cm)
+  const pesoUsado = imc > 30 ? pesoIdeal : pesoKg;
 
   const base = ((140 - idade) * pesoUsado) / (72 * creatinina);
   const crcl = sexo === 'F' ? base * 0.85 : base;
@@ -219,7 +230,14 @@ export function calcDoseFarmaco(farmaco, params) {
     return { doseCalculada: null, unidadeFinal: 'mg', erro: 'doseValor ausente ou inválido', avisos };
   }
 
-  const fatorReducao = 1 - reducaoPct / 100;
+  // CLINIC-04 fix: co-medicações obrigatórias (corticoides, anticoagulantes, etc.)
+  // não devem ter redução percentual de quimioterapia aplicada.
+  // O campo reducaoNaoAplicavel sinaliza isso no catálogo.
+  const reducaoAtiva = farmaco.reducaoNaoAplicavel ? 0 : reducaoPct;
+  if (farmaco.reducaoNaoAplicavel && reducaoPct > 0) {
+    avisos.push(`Redução de ${reducaoPct}% NÃO aplicada — ${farmaco.farmaco || farmaco.nome} é co-medicação de dose fixa obrigatória`);
+  }
+  const fatorReducao = 1 - reducaoAtiva / 100;
 
   try {
     switch (doseUnidade) {
@@ -395,6 +413,22 @@ export function calcProtocoloCompleto(protocolo, paciente) {
     const res = calcCrClSafe(paciente.idade, paciente.pesoKg, paciente.alturaCm, paciente.creatinina, paciente.sexo);
     if (res.erro) erros.push(`ClCr: ${res.erro}`);
     else crcl = res.crcl;
+  }
+
+  // BUG-16 fix: fármacos nefrotóxicos exigem ClCr mesmo para mg/m² (não só AUC/Calvert).
+  // Cisplatina/oxaliplatina em mg/m² calculam sem erro mas necessitam de função renal.
+  const NEFROTOXICOS_PREFIXOS = ['cisplat', 'carboplat', 'oxaliplat', 'metotrexat'];
+  if (!crcl) {
+    const temNefrotoxicoPendente = (protocolo.doseEstruturada || []).some(f => {
+      const nome = normalizarNomeFarmaco(f.farmaco || f.nome);
+      return NEFROTOXICOS_PREFIXOS.some(p => nome.includes(p));
+    });
+    if (temNefrotoxicoPendente) {
+      avisosCriticos.push(
+        '⛔ FUNÇÃO RENAL NÃO AVALIADA: protocolo contém agente nefrotóxico. ' +
+        'Coletar creatinina sérica e calcular ClCr antes de prescrever.'
+      );
+    }
   }
 
   // 3. Farmacos
