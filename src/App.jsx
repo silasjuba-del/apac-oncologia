@@ -34,6 +34,7 @@ import {
   criarDossieInicial, gerarTextoEvolucao, validarAPAC, autoPreencherCamposLaudos,
   orquestrarDossieAtendimento, gerarDocumentosSelecionados, gerarDossieClaude,
 } from './utils/dossie';
+import catalogoQTV03 from './data/protocolos_qt_catalogo_v0.3_curado_preliminar.json';
 
 // ── Imports LAZY — componentes por role / aba / rota ────────────────────────
 // Carregados apenas quando a tab/role correspondente é aberta pela primeira vez.
@@ -52,6 +53,7 @@ const DashboardMedico      = React.lazy(()=>import('./features/medico/DashboardM
 const FilaDiaMedico        = React.lazy(()=>import('./features/medico/FilaDiaMedico'));
 const EstatisticasComp     = React.lazy(()=>import('./features/medico/EstatisticasComp'));
 const PrescricaoQT         = React.lazy(()=>import('./features/prescricao/PrescricaoQT'));
+const PrescricaoQTv2       = React.lazy(()=>import('./features/prescricao/v2/PrescricaoQTv2'));
 const ReceitasComp         = React.lazy(()=>import('./features/recepcao/ReceitasComp'));
 const SalaoMedico          = React.lazy(()=>import('./features/enfermagem/SalaoMedico'));
 const SeletorEquipe        = React.lazy(()=>import('./components/shared/SeletorEquipe'));
@@ -418,13 +420,38 @@ export default function App(){
     setMensagens(x=>[{id:Date.now(),de,para,txt,dt:new Date().toLocaleString("pt-BR"),lida:false,tipo},...x]);
     if(tipo==="emergencia") setEmergenciaAtiva({de,txt,hora:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})});
   },[]);
+  const resetarEstadoTransitorioAtendimento=useCallback(()=>{
+    setUpFiles([]);
+    setTriagemDiscussao(null);
+    setAiPatches([]);
+    setLaudoLiberado(false);
+    setCicloLiberado(false);
+    setSinPac([]);
+    setPronTab("consulta");
+    setPronTab2("evolucao");
+    setPrescricaoTab2("motor45");
+    setEnfermagemTab2("triagem");
+  },[]);
+  const preservarContextoAtualAntesDaTroca=useCallback((proximoPac)=>{
+    if(!pac?.nome)return;
+    const mesmoDestino=((pac?.pacID&&proximoPac?.pacID&&String(pac.pacID)===String(proximoPac.pacID))||
+      (pac?.cpf&&proximoPac?.cpf&&String(pac.cpf).replace(/\D/g,"")===String(proximoPac.cpf).replace(/\D/g,""))||
+      (pac?.cns&&proximoPac?.cns&&String(pac.cns).replace(/\D/g,"")===String(proximoPac.cns).replace(/\D/g,"")));
+    if(mesmoDestino)return;
+    const base=mesmoPacienteDossie(dossieOncologico,pac)?(dossieOncologico||criarDossieInicial(pac)):criarDossieInicial(pac);
+    saveDossiePaciente({...base,paciente:{...(base.paciente||{}),...pac},updatedAt:NOW()});
+    dbSalvarPaciente(pac);
+    closeEncounter();
+  },[pac,dossieOncologico]);
   const abrirAtendimento=useCallback((entrada={})=>{
     const base=entrada.paciente||entrada;
     const novoPac={...PAC0,...base,nome:base.nome||base.pac||base.paciente||"",trat:base.trat||base.proto||base.tipo||"",pacID:base.pacID||genPacID()};
+    preservarContextoAtualAntesDaTroca(novoPac);
     const salvo=loadDossiePaciente(novoPac)||criarDossieInicial(novoPac);
     const novo={...salvo,paciente:{...(salvo.paciente||{}),...novoPac},status:"em_consulta",updatedAt:NOW()};
     novo.evolucao={...(novo.evolucao||{}),rascunho:novo.evolucao?.rascunho||gerarTextoEvolucao(novo)};
     novo.apac=validarAPAC(novo);
+    resetarEstadoTransitorioAtendimento();
     setPac(novoPac);savePacAtual(novoPac);dbSalvarPaciente(novoPac);
     // F0 — registrar encounter ativo no localStorage para o portão de salvamento
     {const encResult=openEncounter(createEncounter(novoPac.pacID, _inferirTipoEncounter(novoPac)));
@@ -434,7 +461,7 @@ export default function App(){
     setMedTab("prontuario");setPronTab("consulta");
     setMedTab2("prontuario");setPronTab2("evolucao");
     addMsg("Sistema","Médico","🩺 Atendimento aberto: "+(novoPac.nome||"paciente")+". Dossiê carregado apenas para este paciente.","standby");
-  },[addMsg]);
+  },[addMsg,preservarContextoAtualAntesDaTroca,resetarEstadoTransitorioAtendimento]);
   const [sinPac,setSinPac]=useState([]);
   const [pacFluxo,setPacFluxo]=useState(null);
   const [pacTab,setPacTab]=useState("reacoes");
@@ -1587,9 +1614,27 @@ export default function App(){
       );
       case "prescricao": return(
         <div>
-          <SubTabsV4 tabs={[{id:"motor45",ico:"🧮",label:"Motor v4.5"},{id:"prescricao_atual",ico:"💉",label:"Prescrição atual"}]} active={prescricaoTab2} onChange={setPrescricaoTab2}/>
+          <SubTabsV4 tabs={[{id:"motor45",ico:"🧮",label:"Motor v4.5"},{id:"prescricao_atual",ico:"💉",label:"Prescrição atual"},{id:"qt_v2",ico:"🔬",label:"Prescrição v2 ⚠️"}]} active={prescricaoTab2} onChange={setPrescricaoTab2}/>
           {prescricaoTab2==="motor45"&&<ProtocolosQTExplorer pac={pac} up={up} addMsg={addMsg} historicoQT={historicoQTPaciente} setHistoricoQT={setHistoricoQTPaciente}/>}
           {prescricaoTab2==="prescricao_atual"&&<PrescricaoQT pac={pac} up={up} addMsg={addMsg} ciclosHistorico={historicoQTPaciente} setCiclosHistorico={setHistoricoQTPaciente} onSalvoCiclos={(proto,ciclos)=>{setDossieOncologico(d=>{const base=d||criarDossieInicial(pac);const doc={id:Date.now(),tipo:"Prescrição QT",nome:`${proto.nome} — ${ciclos.length} ciclos liberados`,resumo:`Protocolo: ${proto.nome}\nCiclos: ${ciclos.length}\nInício: ${ciclos[0]?.data||"—"}\nFármacos: ${proto.drugs?.map(dr=>dr.n).join(", ")||"—"}`,origem:"prescricao_qt",criadoEm:NOW()};const novo={...base,paciente:{...(base.paciente||{}),...pac},documentos:[doc,...(base.documentos||[])],status:"pronto_medico",updatedAt:NOW()};novo.evolucao={...(novo.evolucao||{}),rascunho:gerarTextoEvolucao(novo)};novo.apac=validarAPAC(novo);return novo;});}}/>}
+          {prescricaoTab2==="qt_v2"&&<React.Suspense fallback={<div style={{padding:24,textAlign:"center",color:"#64748B"}}>Carregando módulo v2…</div>}><PrescricaoQTv2
+            catalogoJson={catalogoQTV03}
+            pacienteInicial={{
+              nome:pac.nome||'',
+              prontuario:pac.pacID||pac.id||'',
+              dataNasc:pac.nasc&&/^\d{2}\/\d{2}\/\d{4}$/.test(pac.nasc)?pac.nasc.split("/").reverse().join("-"):(pac.nasc||''),
+              sexo:pac.sexo==="Feminino"?"F":pac.sexo==="Masculino"?"M":'',
+              pesoKg:Number(pac.peso)||'',
+              alturaCm:Number(pac.altura)||'',
+              ecog:pac.ecog||'',
+              histologia:pac.diag||'',
+            }}
+            medico={{
+              nome:funcLogado?.nome||'',
+              crm:(funcLogado?.reg||'').match(/CRM[^·\n]*/i)?.[0]?.trim()||'',
+            }}
+            onPrescricaoGerada={(prescricao)=>{setDossieOncologico(d=>{const base=d||criarDossieInicial(pac);const doc={id:Date.now(),tipo:"Prescrição QT v2",nome:`${prescricao.protocolo?.nome||'Protocolo'} — calculado`,resumo:`Protocolo: ${prescricao.protocolo?.nome}\nBSA: ${prescricao.bsa} m²\nRedução: ${prescricao.reducaoPct||0}%\nFármacos: ${prescricao.resultado?.linhas?.map(l=>l.farmaco).join(', ')||'—'}`,origem:"prescricao_qt_v2",criadoEm:NOW(),auditoria:prescricao.auditoria||null};return{...base,documentos:[doc,...(base.documentos||[])],status:"pronto_medico",updatedAt:NOW()};});}}
+          /></React.Suspense>}
         </div>
       );
       case "apac": return(
@@ -1739,7 +1784,15 @@ export default function App(){
           </div>
         }
       >
-        {renderMedico2()}
+        <div style={{display:"grid",gap:12}}>
+          <AtendimentosStandbyBar
+            pacientes={atendimentosMedicos}
+            ativo={pac}
+            onAbrir={(p)=>React.startTransition(()=>{abrirAtendimento(p);setMedTab2("prontuario");setPronTab2("evolucao");})}
+            onNovo={novoAtendimentoLimpo}
+          />
+          {renderMedico2()}
+        </div>
       </AppShell>
       {/* Chat flutuante */}
       {!chatFlutAberto&&<button
