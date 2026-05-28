@@ -352,8 +352,18 @@ export default function App(){
   const [pronTab2,setPronTab2]=useState("evolucao"); // sub-tabs do prontuário no novo shell
   const [adminTab2,setAdminTab2]=useState("config"); // sub-tabs do admin no novo shell
   const [enfermagemTab2,setEnfermagemTab2]=useState("triagem"); // sub-tabs da enfermagem na lateral
-  const [prescricaoTab2,setPrescricaoTab2]=useState("motor45"); // sub-tabs da prescrição QT
+  const [prescricaoTab2,setPrescricaoTab2]=useState("prescricao_atual"); // sub-tabs da prescrição QT
   const [pronTab,setPronTab]=useState("consulta");
+  useEffect(()=>{
+    const view=new URLSearchParams(window.location.search).get("view");
+    if(view==="prescricao"){
+      setShowAbertura(false);
+      setPg("medico");
+      setMedLogado(true);
+      setMedTab2("quimio");
+      setPrescricaoTab2("prescricao_atual");
+    }
+  },[]);
   // goTab: wrapper com startTransition para todas as navegações de aba
   // Evita "suspended while responding to synchronous input" no React.lazy
   const goTab=(id,extra)=>React.startTransition(()=>{setMedTab2(id);extra&&extra();});
@@ -430,7 +440,7 @@ export default function App(){
     setSinPac([]);
     setPronTab("consulta");
     setPronTab2("evolucao");
-    setPrescricaoTab2("motor45");
+    setPrescricaoTab2("prescricao_atual");
     setEnfermagemTab2("triagem");
   },[]);
   const preservarContextoAtualAntesDaTroca=useCallback((proximoPac)=>{
@@ -631,7 +641,7 @@ export default function App(){
     setCicloLiberado(false);
     setAiPatches([]);
     setPronTab2("evolucao");
-    setPrescricaoTab2("motor45");
+    setPrescricaoTab2("prescricao_atual");
     setEnfermagemTab2("triagem");
     setMedTab2("prontuario");
     addMsg&&addMsg("Prontuário Security","Médico",`Contexto ativo limpo (${motivo}). Nenhum dado do paciente anterior será usado no próximo atendimento.`,"msg");
@@ -1121,7 +1131,7 @@ export default function App(){
 
   if(pg==="assistencia") return <AssistenciaSocialPage pac={pac} up={up} setPac={setPac} back={()=>React.startTransition(()=>setPg("landing"))} laudoLiberado={laudoLiberado} setLaudoLiberado={setLaudoLiberado} alertCount={totalAl} onAlert={goAlerta}/>;
   if(pg==="farmacia") return <FarmaciaPage pac={pac} cicloLiberado={cicloLiberado} setCicloLiberado={setCicloLiberado} mensagens={mensagens} addMsg={addMsg} back={()=>React.startTransition(()=>setPg("landing"))} alertCount={totalAl} onAlert={goAlerta}/>;
-  if(pg==="recepcao") return <RecepcaoPage pac={pac} up={up} setPac={setPac} setPg={setPg} listaEspera={listaEspera} setListaEspera={setListaEspera} addFila={addFila} agendamentos={agendamentos} addAgendamento={addAgendamento} funcLogado={funcLogado} mensagens={mensagens} addMsg={addMsg} alertCount={totalAl} onAlert={goAlerta} dossie={dossieOncologico} setDossie={setDossieGuardado} onEnviar={(destino="prontuario", extras={})=>{
+  if(pg==="recepcao") return <RecepcaoPage pac={pac} up={up} setPac={setPac} setPg={setPg} listaEspera={listaEspera} setListaEspera={setListaEspera} addFila={addFila} agendamentos={agendamentos} addAgendamento={addAgendamento} funcLogado={funcLogado} mensagens={mensagens} addMsg={addMsg} alertCount={totalAl} onAlert={goAlerta} dossie={dossieOncologico} setDossie={setDossieOncologico} onEnviar={(destino="prontuario", extras={})=>{
     const pacientePronto={...pac,status:"pronto_medico",pacID:pac.pacID||genPacID()};
     dbSalvarPaciente(pacientePronto);
     savePacAtual(pacientePronto);
@@ -1613,9 +1623,10 @@ export default function App(){
           </div>}
         </div>
       );
+      case "quimio":
       case "prescricao": return(
         <div>
-          <SubTabsV4 tabs={[{id:"motor45",ico:"🧮",label:"Motor v4.5"},{id:"prescricao_atual",ico:"💉",label:"Prescrição atual"},{id:"qt_v2",ico:"🔬",label:"Prescrição v2 ⚠️"},{id:"novo_protocolo",ico:"➕",label:"Novo Protocolo"}]} active={prescricaoTab2} onChange={setPrescricaoTab2}/>
+          <SubTabsV4 tabs={[{id:"prescricao_atual",ico:"💉",label:"Prescrição atual"},{id:"motor45",ico:"🧮",label:"Motor v4.5"},{id:"qt_v2",ico:"🔬",label:"Prescrição v2 ⚠️"},{id:"novo_protocolo",ico:"➕",label:"Novo Protocolo"}]} active={prescricaoTab2} onChange={setPrescricaoTab2}/>
           {prescricaoTab2==="motor45"&&<ProtocolosQTExplorer pac={pac} up={up} addMsg={addMsg} historicoQT={historicoQTPaciente} setHistoricoQT={setHistoricoQTPaciente}/>}
           {prescricaoTab2==="prescricao_atual"&&<PrescricaoQT pac={pac} up={up} addMsg={addMsg} ciclosHistorico={historicoQTPaciente} setCiclosHistorico={setHistoricoQTPaciente} onSalvoCiclos={(proto,ciclos)=>{setDossieOncologico(d=>{const base=d||criarDossieInicial(pac);const doc={id:Date.now(),tipo:"Prescrição QT",nome:`${proto.nome} — ${ciclos.length} ciclos liberados`,resumo:`Protocolo: ${proto.nome}\nCiclos: ${ciclos.length}\nInício: ${ciclos[0]?.data||"—"}\nFármacos: ${proto.drugs?.map(dr=>dr.n).join(", ")||"—"}`,origem:"prescricao_qt",criadoEm:NOW()};const novo={...base,paciente:{...(base.paciente||{}),...pac},documentos:[doc,...(base.documentos||[])],status:"pronto_medico",updatedAt:NOW()};novo.evolucao={...(novo.evolucao||{}),rascunho:gerarTextoEvolucao(novo)};novo.apac=validarAPAC(novo);return novo;});}}/>}
           {prescricaoTab2==="novo_protocolo"&&<React.Suspense fallback={<div style={{padding:24,textAlign:"center",color:"#64748B"}}>Carregando…</div>}><NovoProtocoloBuilder/></React.Suspense>}
