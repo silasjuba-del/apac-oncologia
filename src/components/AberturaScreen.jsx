@@ -146,27 +146,234 @@ const CSS = `
 // ── DADOS ──────────────────────────────────────────────────────────────────────
 const BASE = import.meta.env.BASE_URL;
 
+// SVGs médicos embutidos — funcionam sem arquivos externos
+const svgUri = (svg) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+
+const SVG_METASTASE = svgUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%"><stop offset="0%" stop-color="#1a0010"/><stop offset="100%" stop-color="#030003"/></radialGradient>
+    <radialGradient id="c1" cx="40%" cy="40%"><stop offset="0%" stop-color="#cc1133"/><stop offset="100%" stop-color="#6b0018"/></radialGradient>
+    <radialGradient id="c2" cx="40%" cy="40%"><stop offset="0%" stop-color="#ff4466"/><stop offset="100%" stop-color="#990022"/></radialGradient>
+    <radialGradient id="c3" cx="40%" cy="40%"><stop offset="0%" stop-color="#dd2244"/><stop offset="100%" stop-color="#7a0015"/></radialGradient>
+    <filter id="gl"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <ellipse cx="400" cy="300" rx="420" ry="320" fill="#12000a" opacity=".6"/>
+  <!-- Célula principal -->
+  <ellipse cx="400" cy="295" rx="170" ry="155" fill="url(#c1)" opacity=".92" filter="url(#gl)"/>
+  <ellipse cx="390" cy="288" rx="65" ry="58" fill="#3a000d" opacity=".85"/>
+  <circle cx="383" cy="284" r="28" fill="#cc1133" opacity=".75"/>
+  <!-- Projeções invasivas (tentáculos) -->
+  <path d="M570 280 Q650 240 720 210" stroke="#cc1133" stroke-width="6" fill="none" opacity=".7"/>
+  <ellipse cx="738" cy="204" rx="38" ry="32" fill="url(#c3)" opacity=".8" filter="url(#gl)"/>
+  <path d="M560 340 Q640 390 700 430" stroke="#dd2244" stroke-width="5" fill="none" opacity=".6"/>
+  <ellipse cx="715" cy="445" rx="30" ry="25" fill="url(#c2)" opacity=".75"/>
+  <path d="M230 260 Q155 210 90 175" stroke="#cc1133" stroke-width="5" fill="none" opacity=".6"/>
+  <ellipse cx="74" cy="168" rx="32" ry="27" fill="url(#c3)" opacity=".75"/>
+  <path d="M250 350 Q170 410 110 455" stroke="#dd2244" stroke-width="4" fill="none" opacity=".55"/>
+  <ellipse cx="96" cy="465" rx="25" ry="22" fill="url(#c2)" opacity=".7"/>
+  <path d="M390 130 Q380 60 370 20" stroke="#cc1133" stroke-width="4" fill="none" opacity=".5"/>
+  <ellipse cx="368" cy="10" rx="22" ry="18" fill="url(#c3)" opacity=".65"/>
+  <path d="M410 470 Q420 540 430 580" stroke="#dd2244" stroke-width="4" fill="none" opacity=".5"/>
+  <ellipse cx="432" cy="590" rx="22" ry="16" fill="url(#c2)" opacity=".6"/>
+  <!-- Micro células satélite -->
+  <circle cx="620" cy="155" r="18" fill="#cc1133" opacity=".5"/>
+  <circle cx="168" cy="490" r="15" fill="#dd2244" opacity=".45"/>
+  <circle cx="680" cy="490" r="13" fill="#ff4466" opacity=".4"/>
+  <circle cx="130" cy="130" r="11" fill="#cc1133" opacity=".4"/>
+  <!-- Glow central -->
+  <ellipse cx="400" cy="295" rx="80" ry="70" fill="#ff0033" opacity=".08"/>
+  <!-- Texto médico HUD -->
+  <text x="22" y="38" font-family="monospace" font-size="11" fill="#cc1133" opacity=".6">METÁSTASE · CARCINOMA INVASIVO</text>
+  <text x="22" y="580" font-family="monospace" font-size="10" fill="#cc1133" opacity=".45">CEL-ID:A2B7 · INVASÃO VASCULAR DETECTADA</text>
+</svg>`);
+
+const SVG_MEDICO = svgUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#020a18"/><stop offset="100%" stop-color="#040c24"/></linearGradient>
+    <linearGradient id="xr" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#c8e6f8" stop-opacity=".85"/><stop offset="100%" stop-color="#4a9cc8" stop-opacity=".6"/></linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="2"/></filter>
+    <filter id="xglow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <!-- Grade HUD de fundo -->
+  <line x1="0" y1="100" x2="800" y2="100" stroke="#1D4ED8" stroke-width=".4" opacity=".3"/>
+  <line x1="0" y1="200" x2="800" y2="200" stroke="#1D4ED8" stroke-width=".4" opacity=".3"/>
+  <line x1="0" y1="300" x2="800" y2="300" stroke="#1D4ED8" stroke-width=".4" opacity=".3"/>
+  <line x1="0" y1="400" x2="800" y2="400" stroke="#1D4ED8" stroke-width=".4" opacity=".3"/>
+  <line x1="0" y1="500" x2="800" y2="500" stroke="#1D4ED8" stroke-width=".4" opacity=".3"/>
+  <line x1="160" y1="0" x2="160" y2="600" stroke="#1D4ED8" stroke-width=".4" opacity=".3"/>
+  <line x1="320" y1="0" x2="320" y2="600" stroke="#1D4ED8" stroke-width=".4" opacity=".3"/>
+  <line x1="480" y1="0" x2="480" y2="600" stroke="#1D4ED8" stroke-width=".4" opacity=".3"/>
+  <line x1="640" y1="0" x2="640" y2="600" stroke="#1D4ED8" stroke-width=".4" opacity=".3"/>
+  <!-- Painel raio-X (tórax) -->
+  <rect x="220" y="60" width="360" height="480" rx="4" fill="#030b1a" stroke="#3a7abf" stroke-width="1.5" opacity=".9"/>
+  <rect x="228" y="68" width="344" height="464" rx="2" fill="#040e20" opacity=".95"/>
+  <!-- Costelas -->
+  <path d="M340 160 Q290 170 265 195 Q255 215 270 230" stroke="#b8d8f0" stroke-width="2.5" fill="none" opacity=".75"/>
+  <path d="M340 180 Q285 192 258 218 Q246 240 262 256" stroke="#b8d8f0" stroke-width="2.5" fill="none" opacity=".7"/>
+  <path d="M340 200 Q282 214 254 243 Q240 268 258 284" stroke="#b8d8f0" stroke-width="2.2" fill="none" opacity=".65"/>
+  <path d="M340 220 Q280 236 250 268 Q235 295 255 312" stroke="#b8d8f0" stroke-width="2" fill="none" opacity=".6"/>
+  <path d="M340 240 Q280 258 248 292 Q232 322 252 340" stroke="#b8d8f0" stroke-width="1.8" fill="none" opacity=".55"/>
+  <path d="M460 160 Q510 170 535 195 Q545 215 530 230" stroke="#b8d8f0" stroke-width="2.5" fill="none" opacity=".75"/>
+  <path d="M460 180 Q515 192 542 218 Q554 240 538 256" stroke="#b8d8f0" stroke-width="2.5" fill="none" opacity=".7"/>
+  <path d="M460 200 Q518 214 546 243 Q560 268 542 284" stroke="#b8d8f0" stroke-width="2.2" fill="none" opacity=".65"/>
+  <path d="M460 220 Q520 236 550 268 Q565 295 545 312" stroke="#b8d8f0" stroke-width="2" fill="none" opacity=".6"/>
+  <path d="M460 240 Q520 258 552 292 Q568 322 548 340" stroke="#b8d8f0" stroke-width="1.8" fill="none" opacity=".55"/>
+  <!-- Coluna vertebral -->
+  <rect x="393" y="130" width="14" height="12" rx="2" fill="#c8e0f0" opacity=".8"/>
+  <rect x="393" y="148" width="14" height="11" rx="2" fill="#c8e0f0" opacity=".77"/>
+  <rect x="393" y="165" width="14" height="11" rx="2" fill="#c8e0f0" opacity=".74"/>
+  <rect x="393" y="182" width="14" height="11" rx="2" fill="#c8e0f0" opacity=".71"/>
+  <rect x="393" y="199" width="14" height="11" rx="2" fill="#c8e0f0" opacity=".68"/>
+  <rect x="393" y="216" width="14" height="11" rx="2" fill="#c8e0f0" opacity=".65"/>
+  <rect x="393" y="233" width="14" height="12" rx="2" fill="#c8e0f0" opacity=".62"/>
+  <rect x="393" y="251" width="14" height="11" rx="2" fill="#c8e0f0" opacity=".59"/>
+  <rect x="393" y="268" width="14" height="11" rx="2" fill="#c8e0f0" opacity=".56"/>
+  <rect x="393" y="285" width="14" height="11" rx="2" fill="#c8e0f0" opacity=".53"/>
+  <rect x="393" y="302" width="14" height="12" rx="2" fill="#c8e0f0" opacity=".5"/>
+  <!-- Pulmões -->
+  <ellipse cx="340" cy="260" rx="55" ry="80" fill="#1a3d5a" opacity=".5"/>
+  <ellipse cx="460" cy="260" rx="55" ry="80" fill="#1a3d5a" opacity=".5"/>
+  <!-- Nódulo suspeito destacado -->
+  <circle cx="468" cy="215" r="14" fill="#ff6633" opacity=".5" filter="url(#xglow)"/>
+  <circle cx="468" cy="215" r="9" fill="#ff4400" opacity=".7"/>
+  <!-- Seta de diagnóstico -->
+  <line x1="510" y1="195" x2="484" y2="213" stroke="#FFD700" stroke-width="1.5" opacity=".8"/>
+  <text x="515" y="192" font-family="monospace" font-size="10" fill="#FFD700" opacity=".85">NÓDULO</text>
+  <!-- Cabeça/pescoço -->
+  <path d="M380 80 Q380 65 400 58 Q420 65 420 80" stroke="#c8d8e8" stroke-width="2" fill="none" opacity=".6"/>
+  <!-- Info HUD -->
+  <text x="232" y="552" font-family="monospace" font-size="9" fill="#4a9cc8" opacity=".7">TÓRAX PA · 120kV · 200mA</text>
+  <text x="445" y="552" font-family="monospace" font-size="9" fill="#4a9cc8" opacity=".5">ONCOLOGIA</text>
+  <!-- Luz cirúrgica -->
+  <circle cx="680" cy="120" r="55" fill="#f0f8ff" opacity=".03"/>
+  <circle cx="680" cy="120" r="35" fill="#f0f8ff" opacity=".04"/>
+</svg>`);
+
+const SVG_IA = svgUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#010810"/><stop offset="100%" stop-color="#020c18"/></linearGradient>
+    <radialGradient id="brain" cx="50%" cy="48%"><stop offset="0%" stop-color="#0a4060"/><stop offset="100%" stop-color="#020c18"/></radialGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow2"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <!-- Cérebro digital simplificado -->
+  <ellipse cx="400" cy="290" rx="180" ry="155" fill="url(#brain)" opacity=".9"/>
+  <!-- Fissura central -->
+  <path d="M400 140 Q398 200 400 290 Q402 380 400 440" stroke="#0891B2" stroke-width="1.5" fill="none" opacity=".5"/>
+  <!-- Giros cerebrais esquerdo -->
+  <path d="M240 240 Q260 210 295 220 Q320 230 330 260 Q340 285 310 295 Q280 305 265 285" stroke="#0891B2" stroke-width="2" fill="none" opacity=".6"/>
+  <path d="M225 300 Q245 270 280 278 Q310 285 318 315 Q325 340 295 348 Q265 356 248 332" stroke="#0891B2" stroke-width="2" fill="none" opacity=".55"/>
+  <path d="M235 360 Q258 335 290 345 Q315 355 320 382 Q325 405 298 412 Q272 418 252 395" stroke="#0891B2" stroke-width="1.8" fill="none" opacity=".5"/>
+  <!-- Giros cerebrais direito -->
+  <path d="M560 240 Q540 210 505 220 Q480 230 470 260 Q460 285 490 295 Q520 305 535 285" stroke="#0891B2" stroke-width="2" fill="none" opacity=".6"/>
+  <path d="M575 300 Q555 270 520 278 Q490 285 482 315 Q475 340 505 348 Q535 356 552 332" stroke="#0891B2" stroke-width="2" fill="none" opacity=".55"/>
+  <path d="M565 360 Q542 335 510 345 Q485 355 480 382 Q475 405 502 412 Q528 418 548 395" stroke="#0891B2" stroke-width="1.8" fill="none" opacity=".5"/>
+  <!-- Nós neurais brilhantes -->
+  <circle cx="295" cy="225" r="5" fill="#00d4ff" opacity=".9" filter="url(#glow2)"/>
+  <circle cx="290" cy="295" r="4" fill="#00d4ff" opacity=".8" filter="url(#glow2)"/>
+  <circle cx="298" cy="355" r="5" fill="#00d4ff" opacity=".85" filter="url(#glow2)"/>
+  <circle cx="505" cy="225" r="5" fill="#00d4ff" opacity=".9" filter="url(#glow2)"/>
+  <circle cx="510" cy="295" r="4" fill="#00d4ff" opacity=".8" filter="url(#glow2)"/>
+  <circle cx="502" cy="355" r="5" fill="#00d4ff" opacity=".85" filter="url(#glow2)"/>
+  <circle cx="400" cy="200" r="6" fill="#00d4ff" opacity=".9" filter="url(#glow)"/>
+  <circle cx="400" cy="380" r="6" fill="#00d4ff" opacity=".85" filter="url(#glow)"/>
+  <!-- Conexões neurais pulsantes -->
+  <line x1="295" y1="225" x2="400" y2="200" stroke="#00d4ff" stroke-width="1" opacity=".4"/>
+  <line x1="505" y1="225" x2="400" y2="200" stroke="#00d4ff" stroke-width="1" opacity=".4"/>
+  <line x1="290" y1="295" x2="400" y2="290" stroke="#00d4ff" stroke-width="1.5" opacity=".5"/>
+  <line x1="510" y1="295" x2="400" y2="290" stroke="#00d4ff" stroke-width="1.5" opacity=".5"/>
+  <line x1="298" y1="355" x2="400" y2="380" stroke="#00d4ff" stroke-width="1" opacity=".4"/>
+  <line x1="502" y1="355" x2="400" y2="380" stroke="#00d4ff" stroke-width="1" opacity=".4"/>
+  <!-- Circuito externo -->
+  <rect x="350" y="440" width="100" height="40" rx="4" stroke="#0891B2" stroke-width="1.5" fill="none" opacity=".5"/>
+  <line x1="400" y1="440" x2="400" y2="420" stroke="#0891B2" stroke-width="1.5" opacity=".5"/>
+  <line x1="360" y1="480" x2="360" y2="510" stroke="#0891B2" stroke-width="1.5" opacity=".4"/>
+  <line x1="440" y1="480" x2="440" y2="510" stroke="#0891B2" stroke-width="1.5" opacity=".4"/>
+  <!-- Texto IA -->
+  <text x="370" y="466" font-family="monospace" font-size="12" fill="#00d4ff" opacity=".8" font-weight="bold">AI·ONCO</text>
+  <!-- Dados fluindo -->
+  <text x="30" y="40" font-family="monospace" font-size="9" fill="#0891B2" opacity=".5">01101000 01100101 01100001 01101100 01110100 01101000</text>
+  <text x="30" y="570" font-family="monospace" font-size="9" fill="#0891B2" opacity=".45">NEURAL·NET · ONCOLOGY·AI · DEEP·LEARNING · v4.2</text>
+  <!-- Glow central -->
+  <ellipse cx="400" cy="290" rx="60" ry="50" fill="#0891B2" opacity=".06"/>
+</svg>`);
+
+const SVG_QUIMIO = svgUri(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#08060a"/><stop offset="100%" stop-color="#0f0d14"/></linearGradient>
+    <radialGradient id="bag" cx="50%" cy="40%"><stop offset="0%" stop-color="#2a1a40"/><stop offset="100%" stop-color="#110d1a"/></radialGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="glow2"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <!-- Fundo molecular -->
+  <circle cx="100" cy="100" r="3" fill="#B8860B" opacity=".3"/>
+  <circle cx="700" cy="80" r="3" fill="#B8860B" opacity=".3"/>
+  <circle cx="150" cy="500" r="3" fill="#B8860B" opacity=".3"/>
+  <circle cx="650" cy="520" r="3" fill="#B8860B" opacity=".3"/>
+  <line x1="100" y1="100" x2="700" y2="80" stroke="#B8860B" stroke-width=".5" opacity=".15"/>
+  <line x1="100" y1="100" x2="150" y2="500" stroke="#B8860B" stroke-width=".5" opacity=".15"/>
+  <line x1="700" y1="80" x2="650" y2="520" stroke="#B8860B" stroke-width=".5" opacity=".15"/>
+  <!-- Bolsa de quimio -->
+  <ellipse cx="400" cy="170" rx="95" ry="115" fill="url(#bag)" stroke="#6a3d9a" stroke-width="1.5" opacity=".85"/>
+  <ellipse cx="400" cy="165" rx="88" ry="108" fill="none" stroke="#8a5db8" stroke-width=".8" opacity=".4"/>
+  <!-- Líquido dentro -->
+  <ellipse cx="400" cy="200" rx="72" ry="75" fill="#1a0d2e" opacity=".9"/>
+  <ellipse cx="400" cy="210" rx="68" ry="60" fill="#220f38" opacity=".7"/>
+  <!-- Brilho bolsa -->
+  <ellipse cx="370" cy="120" rx="22" ry="32" fill="white" opacity=".06"/>
+  <!-- Gancho / suporte -->
+  <path d="M400 55 Q400 35 418 25 Q436 18 438 32" stroke="#c8b060" stroke-width="3" fill="none"/>
+  <rect x="396" y="52" width="8" height="25" rx="2" fill="#c8b060" opacity=".8"/>
+  <!-- Tubo de infusão -->
+  <path d="M400 285 Q402 320 398 360 Q396 400 400 450 Q402 480 400 520 Q399 545 400 580" stroke="#8a6ab8" stroke-width="4" fill="none" opacity=".7"/>
+  <!-- Câmara de gotejamento -->
+  <rect x="385" y="360" width="30" height="48" rx="8" fill="#1a0d2e" stroke="#8a5db8" stroke-width="1.5" opacity=".85"/>
+  <ellipse cx="400" cy="398" rx="10" ry="14" fill="#3a1d60" opacity=".7"/>
+  <!-- Gotas dentro da câmara -->
+  <ellipse cx="400" cy="372" rx="3" ry="4" fill="#9b6dcc" opacity=".8"/>
+  <ellipse cx="395" cy="388" rx="2.5" ry="3.5" fill="#9b6dcc" opacity=".65"/>
+  <!-- Molécula à esquerda (cisplatina estilizada) -->
+  <circle cx="180" cy="300" r="22" fill="#2a1a40" stroke="#B8860B" stroke-width="2" opacity=".85" filter="url(#glow2)"/>
+  <circle cx="180" cy="300" r="10" fill="#c8a020" opacity=".7"/>
+  <text x="174" y="304" font-family="monospace" font-size="9" fill="#FFD700" opacity=".9">Pt</text>
+  <circle cx="140" cy="265" r="12" fill="#2a1a40" stroke="#B8860B" stroke-width="1.5" opacity=".75"/>
+  <text x="134" y="269" font-family="monospace" font-size="8" fill="#c8a020" opacity=".8">Cl</text>
+  <circle cx="220" cy="265" r="12" fill="#2a1a40" stroke="#B8860B" stroke-width="1.5" opacity=".75"/>
+  <text x="214" y="269" font-family="monospace" font-size="8" fill="#c8a020" opacity=".8">Cl</text>
+  <circle cx="140" cy="335" r="12" fill="#2a1a40" stroke="#B8860B" stroke-width="1.5" opacity=".75"/>
+  <text x="134" y="339" font-family="monospace" font-size="8" fill="#c8a020" opacity=".8">NH</text>
+  <circle cx="220" cy="335" r="12" fill="#2a1a40" stroke="#B8860B" stroke-width="1.5" opacity=".75"/>
+  <text x="214" y="339" font-family="monospace" font-size="8" fill="#c8a020" opacity=".8">NH</text>
+  <line x1="180" y1="300" x2="140" y2="265" stroke="#B8860B" stroke-width="1.5" opacity=".6"/>
+  <line x1="180" y1="300" x2="220" y2="265" stroke="#B8860B" stroke-width="1.5" opacity=".6"/>
+  <line x1="180" y1="300" x2="140" y2="335" stroke="#B8860B" stroke-width="1.5" opacity=".6"/>
+  <line x1="180" y1="300" x2="220" y2="335" stroke="#B8860B" stroke-width="1.5" opacity=".6"/>
+  <!-- Label cisplatina -->
+  <text x="145" y="370" font-family="monospace" font-size="9" fill="#FFD700" opacity=".6">CISPLATINA</text>
+  <!-- Molécula à direita (5-FU estilizada) -->
+  <polygon points="620,270 650,255 680,270 680,300 650,315 620,300" fill="#1a0d2e" stroke="#2B7A8C" stroke-width="2" opacity=".85" filter="url(#glow2)"/>
+  <text x="634" y="290" font-family="monospace" font-size="9" fill="#00d4d4" opacity=".9">5-FU</text>
+  <circle cx="600" cy="240" r="10" fill="#1a0d2e" stroke="#2B7A8C" stroke-width="1.5" opacity=".7"/>
+  <text x="594" y="244" font-family="monospace" font-size="7" fill="#2B7A8C" opacity=".8">F</text>
+  <circle cx="700" cy="240" r="10" fill="#1a0d2e" stroke="#2B7A8C" stroke-width="1.5" opacity=".7"/>
+  <text x="695" y="244" font-family="monospace" font-size="7" fill="#2B7A8C" opacity=".8">O</text>
+  <line x1="620" y1="270" x2="600" y2="240" stroke="#2B7A8C" stroke-width="1.5" opacity=".55"/>
+  <line x1="680" y1="270" x2="700" y2="240" stroke="#2B7A8C" stroke-width=".5" opacity=".55"/>
+  <text x="608" y="330" font-family="monospace" font-size="9" fill="#00d4d4" opacity=".55">FLUORURACIL</text>
+  <!-- HUD info -->
+  <text x="22" y="38" font-family="monospace" font-size="10" fill="#B8860B" opacity=".6">QUIMIOTERAPIA SISTÊMICA · PROTOCOLO ATIVO</text>
+  <text x="22" y="575" font-family="monospace" font-size="9" fill="#B8860B" opacity=".4">INFUSÃO CONTROLADA · ml/h · ONCOLOGIA CLÍNICA</text>
+</svg>`);
+
 const IMGS = [
-  {
-    src: `${BASE}img1-metastase.jpg`,
-    fallback: "linear-gradient(135deg, #8B0030 0%, #2B7A8C 50%, #B8860B 100%)",
-    dur: 2600, delay: 200,
-  },
-  {
-    src: `${BASE}img2-medico.jpg`,
-    fallback: "linear-gradient(135deg, #0a1628 0%, #1D4ED8 50%, #0a2040 100%)",
-    dur: 2600, delay: 2400,
-  },
-  {
-    src: `${BASE}img3-ia.jpg`,
-    fallback: "linear-gradient(135deg, #050d1a 0%, #0891B2 50%, #1B365D 100%)",
-    dur: 2600, delay: 4600,
-  },
-  {
-    src: `${BASE}img4-quimio.jpg`,
-    fallback: "linear-gradient(135deg, #1a1a2e 0%, #B8860B 40%, #2B7A8C 100%)",
-    dur: 2600, delay: 6800,
-  },
+  { src: SVG_METASTASE, dur: 2600, delay: 200  },
+  { src: SVG_MEDICO,    dur: 2600, delay: 2400 },
+  { src: SVG_IA,        dur: 2600, delay: 4600 },
+  { src: SVG_QUIMIO,    dur: 2600, delay: 6800 },
 ];
 
 // Letras com stagger
@@ -494,20 +701,11 @@ export default function AberturaScreen({ onConcluir }) {
             animation:"imgFly 2.6s cubic-bezier(.2,.8,.2,1) both",
             pointerEvents:"none",
           }}>
-            {!imgErros[i]
-              ? <img
-                  src={img.src}
-                  alt=""
-                  onError={() => imgErrHandler(i)}
-                  style={{ width:"100%", height:"100%", objectFit:"cover" }}
-                />
-              : <div style={{
-                  width:"100%", height:"100%",
-                  background:img.fallback,
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  fontSize:120, opacity:.6,
-                }}>🧬</div>
-            }
+            <img
+              src={img.src}
+              alt=""
+              style={{ width:"100%", height:"100%", objectFit:"cover" }}
+            />
             {/* Overlay escuro sobre a imagem */}
             <div style={{
               position:"absolute", inset:0,
