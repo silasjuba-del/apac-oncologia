@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Assistente de Prontuário Oncológico — Dr. Silas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { --navy:#1B365D; --teal:#2B7A8C; --gold:#B8860B; }
+    body { font-family:'Inter',system-ui,sans-serif; }
+    .block-header { background:#1B365D; color:white; padding:8px 16px; font-weight:600; font-size:13px; letter-spacing:.5px; }
+    .editable { outline:none; min-height:60px; }
+    .editable:focus { background:#FAFBFF; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .spinner { animation:spin .8s linear infinite; }
+    @keyframes pulse-gold { 0%,100%{box-shadow:0 0 0 0 rgba(184,134,11,.4)} 50%{box-shadow:0 0 0 8px rgba(184,134,11,0)} }
+    .btn-ai { animation:pulse-gold 2s infinite; }
+    .streaming-cursor::after { content:'▋'; animation:blink .7s step-end infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+    .bloco-container { transition:box-shadow .2s; }
+    .bloco-container:hover { box-shadow:0 0 0 2px #1B365D22; }
+    pre { white-space:pre-wrap; font-family:inherit; }
+  </style>
+</head>
+<body class="bg-[#F0F4F8] min-h-screen">
+
+<!-- HEADER -->
+<div class="bg-[#1B365D] text-white px-6 py-4 shadow-xl">
+  <div class="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 bg-[#B8860B] rounded-xl flex items-center justify-center shadow">
+        <span class="text-[#1B365D] font-black text-2xl">Ω</span>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight">Assistente de Prontuário Oncológico</h1>
+        <p class="text-[#94A3B8] text-xs">Hospital do Bem · Patos-PB · Dr. Silas Negrão Serra Jr. · CRM-PB 17341</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="api-status" class="text-xs px-3 py-1 rounded-full bg-red-900/40 text-red-300">⚠ API Key não configurada</span>
+      <button onclick="toggleApiConfig()" class="text-xs px-4 py-2 bg-[#B8860B] hover:bg-[#9A7209] rounded-lg font-semibold transition">
+        ⚙ Configurar Gemini
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- API CONFIG PANEL (oculto por padrão) -->
+<div id="api-panel" class="hidden bg-[#0F2040] border-b border-[#1B365D] px-6 py-4">
+  <div class="max-w-7xl mx-auto">
+    <div class="bg-[#162B45] rounded-xl p-4 flex flex-wrap gap-4 items-end">
+      <div class="flex-1 min-w-[280px]">
+        <label class="block text-xs font-semibold text-[#94A3B8] mb-1">Google Gemini API Key</label>
+        <input id="api-key-input" type="password" placeholder="AIza..."
+          class="w-full px-4 py-2 bg-[#0F2040] border border-[#2B4A6F] rounded-lg text-white text-sm focus:outline-none focus:border-[#B8860B]">
+        <p class="text-[#64748B] text-xs mt-1">
+          Obtenha grátis em: <a href="https://aistudio.google.com/apikey" target="_blank" class="text-[#B8860B] underline">aistudio.google.com/apikey</a>
+        </p>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-[#94A3B8] mb-1">Modelo</label>
+        <select id="model-select" class="px-3 py-2 bg-[#0F2040] border border-[#2B4A6F] rounded-lg text-white text-sm focus:outline-none">
+          <option value="gemini-2.0-flash">Gemini 2.0 Flash (rápido)</option>
+          <option value="gemini-1.5-pro">Gemini 1.5 Pro (melhor)</option>
+          <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+        </select>
+      </div>
+      <button onclick="saveApiKey()" class="px-6 py-2 bg-[#B8860B] hover:bg-[#9A7209] text-white rounded-lg font-semibold text-sm transition">
+        Salvar e Testar
+      </button>
+      <button onclick="clearApiKey()" class="px-4 py-2 border border-red-800 text-red-400 hover:bg-red-900/20 rounded-lg text-sm transition">
+        Limpar
+      </button>
+    </div>
+    <p id="api-test-msg" class="text-xs mt-2 text-[#64748B]"></p>
+  </div>
+</div>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+  <!-- BARRA DE COMANDO -->
+  <div class="bg-white rounded-2xl border border-[#E2E8F0] p-5 shadow-sm">
+    <div class="flex items-center gap-2 mb-3">
+      <span class="text-sm font-bold text-[#1B365D]">Comando Rápido</span>
+      <span class="text-xs px-2 py-0.5 bg-[#F1F5F9] text-[#64748B] rounded font-mono">Estilo Drive</span>
+    </div>
+    <div class="flex gap-3">
+      <input id="command-input" type="text" placeholder="drive — prontuário — João Silva"
+        class="flex-1 px-4 py-3 text-base border border-[#CBD5E1] rounded-xl focus:outline-none focus:border-[#1B365D] transition">
+      <button onclick="processCommand()"
+        class="bg-[#1B365D] hover:bg-[#162D4A] text-white px-7 rounded-xl font-semibold transition">
+        Executar
+      </button>
+    </div>
+    <p class="text-xs text-[#94A3B8] mt-1.5">Ex: <span class="font-mono">drive — prontuário — Maria Souza</span></p>
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+
+    <!-- ENTRADA -->
+    <div class="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+      <h2 class="font-bold text-[#1B365D] text-lg mb-4 flex items-center gap-2">
+        <span class="w-7 h-7 rounded-lg bg-[#1B365D] text-white text-xs flex items-center justify-center font-bold">1</span>
+        Entrada de Dados
+      </h2>
+
+      <label class="block text-sm font-medium text-[#374151] mb-1.5">
+        Cole aqui os laudos, relatórios, exames, evoluções...
+      </label>
+      <textarea id="input-text" rows="12"
+        class="w-full border border-[#CBD5E1] rounded-xl p-4 text-sm focus:outline-none focus:border-[#1B365D] resize-y transition"
+        placeholder="Ex: Paciente João Silva, 58 anos... diagnóstico adenocarcinoma... biópsia... estadiamento..."></textarea>
+
+      <div class="flex gap-3 mt-3">
+        <button onclick="loadExample()"
+          class="flex-1 px-4 py-2.5 text-sm border border-[#CBD5E1] rounded-xl hover:bg-[#F8FAFC] transition">
+          📋 Exemplo
+        </button>
+        <button onclick="processTextGemini()" id="btn-gemini"
+          class="btn-ai flex-1 bg-[#B8860B] hover:bg-[#9A7209] text-white px-4 py-2.5 rounded-xl text-sm font-bold transition flex items-center justify-center gap-2">
+          <span id="gemini-icon">✨</span>
+          <span id="gemini-label">Processar com Gemini</span>
+        </button>
+      </div>
+      <p class="text-xs text-[#94A3B8] mt-2 text-center">A IA extrai e organiza automaticamente nos 6 blocos</p>
+
+      <!-- Progresso -->
+      <div id="progress-bar" class="hidden mt-3">
+        <div class="w-full bg-[#F1F5F9] rounded-full h-1.5">
+          <div id="progress-fill" class="bg-[#B8860B] h-1.5 rounded-full transition-all duration-500" style="width:0%"></div>
+        </div>
+        <p id="progress-msg" class="text-xs text-[#64748B] mt-1 text-center"></p>
+      </div>
+    </div>
+
+    <!-- BLOCOS -->
+    <div class="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm overflow-y-auto max-h-[700px]">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-bold text-[#1B365D] text-lg flex items-center gap-2">
+          <span class="w-7 h-7 rounded-lg bg-[#1B365D] text-white text-xs flex items-center justify-center font-bold">2</span>
+          Resumo em 6 Blocos
+        </h2>
+        <button onclick="clearAll()" class="text-xs px-3 py-1 text-[#94A3B8] hover:text-red-500 transition">🗑 Limpar</button>
+      </div>
+
+      <!-- Bloco 1 -->
+      <div class="mb-3 bloco-container rounded-xl overflow-hidden border border-[#E2E8F0]">
+        <div class="block-header flex items-center justify-between">
+          <span>BLOCO 1 — DADOS ANAGRÁFICOS</span>
+          <button onclick="copyBloco(1)" class="text-xs opacity-60 hover:opacity-100">📋</button>
+        </div>
+        <div id="bloco1" contenteditable="true" class="editable p-4 text-sm text-[#1f2937] leading-relaxed"></div>
+      </div>
+
+      <!-- Bloco 2 -->
+      <div class="mb-3 bloco-container rounded-xl overflow-hidden border border-[#E2E8F0]">
+        <div class="block-header flex items-center justify-between">
+          <span>BLOCO 2 — RESUMO CLÍNICO</span>
+          <button onclick="copyBloco(2)" class="text-xs opacity-60 hover:opacity-100">📋</button>
+        </div>
+        <div id="bloco2" contenteditable="true" class="editable p-4 text-sm text-[#1f2937] leading-relaxed"></div>
+      </div>
+
+      <!-- Bloco 3 -->
+      <div class="mb-3 bloco-container rounded-xl overflow-hidden border border-[#E2E8F0]">
+        <div class="block-header flex items-center justify-between">
+          <span>BLOCO 3 — DADOS CLÍNICOS GERAIS</span>
+          <button onclick="copyBloco(3)" class="text-xs opacity-60 hover:opacity-100">📋</button>
+        </div>
+        <div id="bloco3" contenteditable="true" class="editable p-4 text-sm text-[#1f2937] leading-relaxed whitespace-pre-wrap font-mono text-xs"></div>
+      </div>
+
+      <!-- Bloco 4 -->
+      <div class="mb-3 bloco-container rounded-xl overflow-hidden border border-[#E2E8F0]">
+        <div class="block-header flex items-center justify-between">
+          <span>BLOCO 4 — DADOS ONCOLÓGICOS E EXAMES</span>
+          <button onclick="copyBloco(4)" class="text-xs opacity-60 hover:opacity-100">📋</button>
+        </div>
+        <div id="bloco4" contenteditable="true" class="editable p-4 text-sm text-[#1f2937] leading-relaxed"></div>
+      </div>
+
+      <!-- Bloco 5 -->
+      <div class="mb-3 bloco-container rounded-xl overflow-hidden border border-[#E2E8F0]">
+        <div class="block-header flex items-center justify-between">
+          <span>BLOCO 5 — CONDUTA TERAPÊUTICA</span>
+          <button onclick="copyBloco(5)" class="text-xs opacity-60 hover:opacity-100">📋</button>
+        </div>
+        <div id="bloco5" contenteditable="true" class="editable p-4 text-sm text-[#1f2937] leading-relaxed"></div>
+      </div>
+
+      <!-- Bloco 6 -->
+      <div class="bloco-container rounded-xl overflow-hidden border border-[#E2E8F0]">
+        <div class="block-header flex items-center justify-between">
+          <span>BLOCO 6 — OBSERVAÇÕES / APAC / TRIALS</span>
+          <button onclick="copyBloco(6)" class="text-xs opacity-60 hover:opacity-100">📋</button>
+        </div>
+        <div id="bloco6" contenteditable="true" class="editable p-4 text-sm text-[#1f2937] leading-relaxed"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GERAÇÃO DE PDFs -->
+  <div class="bg-white rounded-2xl border border-[#E2E8F0] p-6 shadow-sm">
+    <h2 class="font-bold text-[#1B365D] text-lg mb-4 flex items-center gap-2">
+      <span class="w-7 h-7 rounded-lg bg-[#1B365D] text-white text-xs flex items-center justify-center font-bold">3</span>
+      Gerar Documentos PDF
+    </h2>
+
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+      <button onclick="generatePDF(1)" class="px-3 py-3 bg-white border border-[#CBD5E1] hover:bg-[#F0F7FF] hover:border-[#1B365D] rounded-xl text-sm font-medium transition text-left">
+        <div class="text-lg mb-1">🔬</div>
+        <div class="font-semibold text-[#1B365D]">Lab</div>
+        <div class="text-xs text-[#94A3B8]">Exames laboratoriais</div>
+      </button>
+      <button onclick="generatePDF(2)" class="px-3 py-3 bg-white border border-[#CBD5E1] hover:bg-[#F0F7FF] hover:border-[#1B365D] rounded-xl text-sm font-medium transition text-left">
+        <div class="text-lg mb-1">🥗</div>
+        <div class="font-semibold text-[#1B365D]">Nutricional</div>
+        <div class="text-xs text-[#94A3B8]">Avaliação nutricional</div>
+      </button>
+      <button onclick="generatePDF(3)" class="px-3 py-3 bg-white border border-[#CBD5E1] hover:bg-[#F0F7FF] hover:border-[#1B365D] rounded-xl text-sm font-medium transition text-left">
+        <div class="text-lg mb-1">🚨</div>
+        <div class="font-semibold text-[#1B365D]">Alarme</div>
+        <div class="text-xs text-[#94A3B8]">Sinais de alerta</div>
+      </button>
+      <button onclick="generatePDF(4)" class="px-3 py-3 bg-white border border-[#CBD5E1] hover:bg-[#F0F7FF] hover:border-[#1B365D] rounded-xl text-sm font-medium transition text-left">
+        <div class="text-lg mb-1">💊</div>
+        <div class="font-semibold text-[#1B365D]">Receita VO</div>
+        <div class="text-xs text-[#94A3B8]">Medicamentos via oral</div>
+      </button>
+      <button onclick="generatePDF(5)" class="px-3 py-3 bg-white border border-[#CBD5E1] hover:bg-[#F0F7FF] hover:border-[#1B365D] rounded-xl text-sm font-medium transition text-left">
+        <div class="text-lg mb-1">📄</div>
+        <div class="font-semibold text-[#1B365D]">TCLE</div>
+        <div class="text-xs text-[#94A3B8]">Termo de consentimento</div>
+      </button>
+      <button onclick="generatePDF(6)" class="px-3 py-3 bg-white border border-[#CBD5E1] hover:bg-[#F0F7FF] hover:border-[#1B365D] rounded-xl text-sm font-medium transition text-left">
+        <div class="text-lg mb-1">⚖️</div>
+        <div class="font-semibold text-[#1B365D]">Laudo Pericial</div>
+        <div class="text-xs text-[#94A3B8]">Para INSS / Justiça</div>
+      </button>
+      <button onclick="generatePDF(7)" class="px-3 py-3 bg-white border border-[#CBD5E1] hover:bg-[#F0F7FF] hover:border-[#1B365D] rounded-xl text-sm font-medium transition text-left">
+        <div class="text-lg mb-1">🗓</div>
+        <div class="font-semibold text-[#1B365D]">Retorno 7d</div>
+        <div class="text-xs text-[#94A3B8]">Consulta retorno</div>
+      </button>
+      <button onclick="generatePDF(8)" class="px-3 py-3 bg-white border border-[#CBD5E1] hover:bg-[#F0F7FF] hover:border-[#1B365D] rounded-xl text-sm font-medium transition text-left">
+        <div class="text-lg mb-1">🏥</div>
+        <div class="font-semibold text-[#1B365D]">EV UBS</div>
+        <div class="text-xs text-[#94A3B8]">Encaminhamento UBS</div>
+      </button>
+    </div>
+
+    <button onclick="generateAllPDFsAndZip()"
+      class="w-full bg-[#B8860B] hover:bg-[#9A7209] text-white py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-3 transition shadow-lg">
+      📦 Gerar Todos os 8 PDFs + ZIP
+    </button>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="fixed bottom-6 right-6 hidden z-50">
+  <div id="toast-inner" class="px-5 py-3 rounded-xl text-white font-medium text-sm shadow-xl"></div>
+</div>
+
+<script>
+// ─── CONFIG GEMINI ──────────────────────────────────────────────────────────────
+function toggleApiConfig() {
+  const panel = document.getElementById('api-panel');
+  panel.classList.toggle('hidden');
+  if (!panel.classList.contains('hidden')) {
+    const saved = localStorage.getItem('gemini_api_key') || '';
+    document.getElementById('api-key-input').value = saved;
+    const savedModel = localStorage.getItem('gemini_model') || 'gemini-2.0-flash';
+    document.getElementById('model-select').value = savedModel;
+  }
+}
+
+function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  const model = document.getElementById('model-select').value;
+  if (!key) { showToast('Cole a API Key primeiro', 'error'); return; }
+  localStorage.setItem('gemini_api_key', key);
+  localStorage.setItem('gemini_model', model);
+  updateApiStatus();
+  testApiKey(key, model);
+}
+
+function clearApiKey() {
+  localStorage.removeItem('gemini_api_key');
+  document.getElementById('api-key-input').value = '';
+  updateApiStatus();
+  showToast('API Key removida', 'info');
+}
+
+function updateApiStatus() {
+  const key = localStorage.getItem('gemini_api_key');
+  const el = document.getElementById('api-status');
+  if (key) {
+    el.className = 'text-xs px-3 py-1 rounded-full bg-green-900/40 text-green-300';
+    el.textContent = '✓ Gemini configurado';
+  } else {
+    el.className = 'text-xs px-3 py-1 rounded-full bg-red-900/40 text-red-300';
+    el.textContent = '⚠ API Key não configurada';
+  }
+}
+
+async function testApiKey(key, model) {
+  const msgEl = document.getElementById('api-test-msg');
+  msgEl.textContent = 'Testando conexão...';
+  msgEl.className = 'text-xs mt-2 text-yellow-400';
+  try {
+    const res = await callGemini('Responda apenas: OK', key, model);
+    msgEl.textContent = '✓ Conexão com Gemini bem sucedida! Modelo: ' + model;
+    msgEl.className = 'text-xs mt-2 text-green-400';
+    showToast('Gemini conectado com sucesso!', 'success');
+    setTimeout(() => document.getElementById('api-panel').classList.add('hidden'), 2000);
+  } catch(e) {
+    msgEl.textContent = '✗ Erro: ' + e.message;
+    msgEl.className = 'text-xs mt-2 text-red-400';
+    showToast('Erro na API: ' + e.message, 'error');
+  }
+}
+
+// ─── CHAMADA GEMINI ─────────────────────────────────────────────────────────────
+async function callGemini(prompt, key, model) {
+  key = key || localStorage.getItem('gemini_api_key');
+  model = model || localStorage.getItem('gemini_model') || 'gemini-2.0-flash';
+  if (!key) throw new Error('API Key não configurada. Clique em "Configurar Gemini".');
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 4096 }
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+// ─── PROCESSAR COM GEMINI ────────────────────────────────────────────────────────
+async function processTextGemini() {
+  const rawText = document.getElementById('input-text').value.trim();
+  if (!rawText) { showToast('Cole o texto dos laudos antes', 'error'); return; }
+
+  const key = localStorage.getItem('gemini_api_key');
+  if (!key) {
+    showToast('Configure a API Key do Gemini primeiro', 'error');
+    toggleApiConfig();
+    return;
+  }
+
+  // UI loading
+  document.getElementById('gemini-icon').innerHTML = '<svg class="spinner w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="3" stroke-dasharray="30 70"/></svg>';
+  document.getElementById('gemini-label').textContent = 'Processando...';
+  document.getElementById('btn-gemini').disabled = true;
+
+  showProgress(10, 'Enviando para o Gemini...');
+
+  const prompt = buildPrompt(rawText);
+
+  try {
+    showProgress(30, 'Gemini analisando os laudos...');
+    const resultado = await callGemini(prompt);
+    showProgress(80, 'Organizando os blocos...');
+
+    const parsed = parseGeminiResult(resultado);
+    preencherBlocos(parsed);
+
+    showProgress(100, 'Concluído!');
+    setTimeout(() => hideProgress(), 1500);
+    showToast('✓ Resumo gerado com Gemini AI!', 'success');
+
+  } catch (e) {
+    hideProgress();
+    showToast('Erro: ' + e.message, 'error');
+    console.error(e);
+  } finally {
+    document.getElementById('gemini-icon').textContent = '✨';
+    document.getElementById('gemini-label').textContent = 'Processar com Gemini';
+    document.getElementById('btn-gemini').disabled = false;
+  }
+}
+
+function buildPrompt(texto) {
+  return `Você é um assistente médico especializado em oncologia clínica.
+Analise o texto médico abaixo e organize as informações em EXATAMENTE 6 blocos estruturados.
+Responda APENAS com o JSON válido no formato especificado. Não adicione explicações fora do JSON.
+
+TEXTO MÉDICO:
+"""
+${texto}
+"""
+
+Responda com este JSON (preencha cada bloco com as informações extraídas do texto):
+{
+  "bloco1": "NOME COMPLETO: [extrair]\\nIDADE: [extrair] anos\\nDATA NASCIMENTO: [extrair se disponível]\\nSEXO: [extrair]\\nNATURAL DE: [extrair]\\nPRONTUÁRIO: [extrair se disponível]\\nMÉDICO RESPONSÁVEL: Dr. Silas Negrão Serra Jr. — CRM-PB 17341\\nSERVIÇO: Oncologia Clínica — Hospital do Bem, Patos-PB",
+
+  "bloco2": "Parágrafo narrativo e fluido com resumo clínico completo do paciente: diagnóstico, estadiamento, tratamentos realizados, situação atual.",
+
+  "bloco3": "COMORBIDADES:\\n- [listar]\\n\\nMEDICAÇÕES EM USO:\\n- [listar com doses]\\n\\nALERGIAS:\\n- [listar ou Nega]\\n\\nCIRURGIAS PRÉVIAS:\\n- [listar]\\n\\nTABAGISMO: [status]\\nETILISMO: [status]\\n\\nECOG: [valor]\\nPESO: [se disponível]\\nALTURA: [se disponível]",
+
+  "bloco4": "DIAGNÓSTICO PRINCIPAL\\n[CID-10 e nome completo do tumor]\\nEstadiamento: [TNM e Estádio]\\n\\nANATOMOPATOLÓGICO\\n[resultados das biópsias com datas]\\n\\nIMAGEM\\n[TC, PET, RNM com datas e achados]\\n\\nLABORATORIAL\\n[marcadores tumorais, hemograma, bioquímica relevante]",
+
+  "bloco5": "Linha do tempo terapêutica cronológica:\\n• [data]: [procedimento/tratamento]\\n• [data]: [procedimento/tratamento]\\n\\nTRATAMENTO ATUAL:\\n[descrever]\\n\\nRESPOSTA AO TRATAMENTO:\\n[descrever se disponível]",
+
+  "bloco6": "PENDÊNCIAS:\\n- [listar exames, consultas, documentos pendentes]\\n\\nAPAC/AUTORIZAÇÃO:\\n[PCDT aplicável, CID, código APAC]\\n\\nORIENTAÇÕES AO PACIENTE:\\n[orientações relevantes]\\n\\nRETORNO PROGRAMADO:\\n[data se disponível]\\n\\nEVIDÊNCIA CIENTÍFICA:\\n[1-2 trials/estudos relevantes se aplicável]"
+}
+
+IMPORTANTE: Extraia apenas informações presentes no texto. Para dados ausentes, escreva "Não informado". Mantenha terminologia médica precisa.`;
+}
+
+function parseGeminiResult(text) {
+  try {
+    // Tenta extrair JSON do texto (Gemini às vezes adiciona markdown)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('JSON não encontrado na resposta');
+  } catch(e) {
+    // Fallback: tenta parsear o texto puro
+    console.warn('JSON parse falhou, usando fallback:', e.message);
+    return {
+      bloco1: 'Erro ao parsear resposta. Verifique o console.',
+      bloco2: text,
+      bloco3: '', bloco4: '', bloco5: '', bloco6: ''
+    };
+  }
+}
+
+function preencherBlocos(data) {
+  const blocos = ['bloco1','bloco2','bloco3','bloco4','bloco5','bloco6'];
+  blocos.forEach(id => {
+    const el = document.getElementById(id);
+    if (data[id]) {
+      el.innerText = data[id];
+    }
+  });
+}
+
+// ─── COMMAND BAR ────────────────────────────────────────────────────────────────
+function processCommand() {
+  const cmd = document.getElementById('command-input').value.trim();
+  if (!cmd) return;
+
+  const nameMatch = cmd.match(/(?:prontu[aá]rio)\s*[-—]?\s*(.+)/i);
+  if (nameMatch) {
+    const patientName = nameMatch[1].trim();
+    showToast(`Buscando "${patientName}" no Drive... (use a API do Drive para busca real)`, 'info');
+    loadExample();
+    setTimeout(() => processTextGemini(), 400);
+  } else {
+    showToast('Formato inválido. Tente: drive — prontuário — Nome', 'error');
+  }
+}
+
+document.getElementById('command-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') processCommand();
+});
+
+// ─── EXEMPLO ────────────────────────────────────────────────────────────────────
+function loadExample() {
+  document.getElementById('input-text').value = `Paciente Maria das Graças Silva, 62 anos, feminino, natural de Patos-PB.
+Data de nascimento: 14/03/1963. Prontuário HDB-2025-0847.
+
+DIAGNÓSTICO: Adenocarcinoma de mama direita, subtipo luminal B.
+Diagnóstico confirmado em março de 2025 por biópsia core.
+
+BIÓPSIA CORE (03/2025): Carcinoma ductal infiltrante grau histológico 2.
+Imunohistoquímica: RE 90% (forte), RP 70%, HER2 negativo (IHQ 1+), Ki67 35%.
+
+ESTADIAMENTO: T2N1M0 — Estádio IIB.
+TC tórax e abdome (03/2025): Nódulo axilar direito de 1,8cm. Sem sinais de metástase à distância.
+Cintilografia óssea (03/2025): Sem evidência de comprometimento ósseo.
+
+CIRURGIA: Mastectomia radical modificada à direita com esvaziamento axilar (04/04/2025).
+AP cirúrgico: Tumor 3,2cm, grau 2, margens livres (>5mm). 3/18 linfonodos positivos.
+
+QUIMIOTERAPIA ADJUVANTE: Protocolo AC-T iniciado em 15/05/2025.
+4 ciclos de AC (doxorrubicina 60mg/m² + ciclofosfamida 600mg/m²) — concluídos em agosto/2025.
+12 infusões semanais de paclitaxel 80mg/m² — concluídas em setembro/2025.
+
+RADIOTERAPIA: Adjuvante à parede torácica e cadeia mamária interna — concluída em 28/09/2025.
+
+HORMONIOTERAPIA ATUAL: Tamoxifeno 20mg/dia desde outubro/2025.
+
+COMORBIDADES: Hipertensão arterial sistêmica (em uso de losartana 50mg + hidroclorotiazida 25mg).
+Diabetes mellitus tipo 2 (metformina 1000mg 2x/dia). Dislipidemia (sinvastatina 40mg).
+
+ALERGIAS: Dipirona (urticária).
+TABAGISMO: Nunca fumou. ETILISMO: Nega.
+ECOG: 1. Peso: 68kg. Altura: 1,58m.
+
+ÚLTIMOS EXAMES (01/2026):
+CA 15-3: 18,2 U/mL (VR < 25).
+CEA: 2,1 ng/mL (normal).
+Hemoglobina: 13,2 g/dL. Leucócitos: 6.200/mm³.
+ALT/AST: normais. Creatinina: 0,9 mg/dL.
+
+Paciente em seguimento regular trimestral. Boa tolerância ao tratamento. Nega queixas atuais.
+Próxima mamografia bilateral programada para março/2026.`;
+}
+
+// ─── GERAÇÃO DE PDF ──────────────────────────────────────────────────────────────
+function getPacienteInfo() {
+  const b1 = document.getElementById('bloco1').innerText || '';
+  const linhas = b1.split('\n');
+  const nome = linhas.find(l => l.includes('NOME') || l.match(/^[A-Z].*[a-z]/))?.replace(/.*:\s*/, '') || 'Paciente';
+  return nome.trim().substring(0, 40);
+}
+
+function buildPDFHeader(doc, titulo, subtitulo) {
+  // Header navy
+  doc.setFillColor(27, 54, 93);
+  doc.rect(0, 0, 210, 22, 'F');
+
+  // Logo placeholder
+  doc.setFillColor(184, 134, 11);
+  doc.roundedRect(10, 4, 14, 14, 2, 2, 'F');
+  doc.setTextColor(27, 54, 93);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Ω', 14, 14);
+
+  // Título hospital
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('HOSPITAL DO BEM — ONCOLOGIA CLÍNICA', 28, 10);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Dr. Silas Negrão Serra Jr. · CRM-PB 17341 · RQE 9099', 28, 17);
+
+  // Título documento
+  doc.setTextColor(27, 54, 93);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text(titulo, 14, 33);
+
+  if (subtitulo) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(subtitulo, 14, 40);
+  }
+
+  // Linha separadora ouro
+  doc.setDrawColor(184, 134, 11);
+  doc.setLineWidth(0.5);
+  doc.line(14, 43, 196, 43);
+
+  // Info do paciente
+  const paciente = getPacienteInfo();
+  const data = new Date().toLocaleDateString('pt-BR');
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60, 60, 60);
+  doc.text(`Paciente: ${paciente}`, 14, 50);
+  doc.text(`Data: ${data}`, 160, 50);
+
+  return 58; // próxima linha Y
+}
+
+function addPDFContent(doc, content, startY) {
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(30, 30, 30);
+  const lines = doc.splitTextToSize(content, 182);
+  let y = startY;
+  lines.forEach(line => {
+    if (y > 278) { doc.addPage(); buildPDFHeader(doc, '', ''); y = 30; }
+    doc.text(line, 14, y);
+    y += 5;
+  });
+  return y;
+}
+
+function addPDFFooter(doc) {
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFillColor(27, 54, 93);
+    doc.rect(0, 284, 210, 13, 'F');
+    doc.setTextColor(148, 163, 184);
+    doc.setFontSize(7);
+    doc.text('Hospital do Bem — Patos-PB — Oncologia Clínica', 14, 291);
+    doc.text(`Pág. ${i}/${pages}`, 190, 291, {align: 'right'});
+  }
+}
+
+const PDF_CONFIGS = {
+  1: {
+    titulo: '1 — SOLICITAÇÃO DE EXAMES LABORATORIAIS',
+    subtitulo: 'Exames para próximo ciclo / controle oncológico',
+    buildContent: () => {
+      const b4 = document.getElementById('bloco4').innerText;
+      return `EXAMES SOLICITADOS:\n\n` +
+        `HEMOGRAMA COMPLETO COM DIFERENCIAL\n` +
+        `BIOQUÍMICA: glicose, ureia, creatinina, TGO, TGP, FA, GGT, bilirrubinas\n` +
+        `ELETRÓLITOS: sódio, potássio, cálcio, fósforo, magnésio\n` +
+        `COAGULOGRAMA: TAP, TTPA, fibrinogênio\n` +
+        `MARCADORES TUMORAIS: (conforme diagnóstico do paciente)\n\n` +
+        `DADOS ONCOLÓGICOS RELEVANTES:\n` + b4.substring(0, 500);
+    }
+  },
+  2: {
+    titulo: '2 — AVALIAÇÃO E SUPORTE NUTRICIONAL',
+    subtitulo: 'Triagem nutricional oncológica — NRS-2002',
+    buildContent: () => {
+      const b3 = document.getElementById('bloco3').innerText;
+      return `AVALIAÇÃO NUTRICIONAL ONCOLÓGICA\n\n` +
+        `Diagnóstico nutricional: A realizar\n` +
+        `IMC: calcular (peso/altura²)\n\n` +
+        `DADOS CLÍNICOS:\n` + b3.substring(0, 400) + `\n\n` +
+        `CONDUTA NUTRICIONAL:\n` +
+        `- Encaminhamento para nutricionista especializado em oncologia\n` +
+        `- Suplementação calórico-proteica se necessário\n` +
+        `- Orientação sobre manejo de sintomas (náuseas, mucosite, anorexia)\n` +
+        `- Monitoramento semanal de peso durante quimioterapia`;
+    }
+  },
+  3: {
+    titulo: '3 — CARTÃO DE ALARME — SINAIS E SINTOMAS',
+    subtitulo: 'Orientações de urgência para paciente em quimioterapia',
+    buildContent: () => {
+      return `RETORNE IMEDIATAMENTE AO PRONTO-SOCORRO SE APRESENTAR:\n\n` +
+        `🔴 EMERGÊNCIAS — IR AO PS IMEDIATAMENTE:\n` +
+        `• Febre ≥ 37,8°C (pode indicar neutropenia febril — EMERGÊNCIA ONCOLÓGICA)\n` +
+        `• Calafrios intensos ou tremores\n` +
+        `• Dificuldade para respirar ou falta de ar em repouso\n` +
+        `• Dor no peito\n` +
+        `• Sangramento intenso (urina, fezes, vômito)\n` +
+        `• Queda abrupta do estado geral\n\n` +
+        `🟡 ATENÇÃO — CONTATAR O SERVIÇO EM 24h:\n` +
+        `• Vômitos ou diarreia > 4x/dia\n` +
+        `• Dor que não melhora com analgésico habitual\n` +
+        `• Feridas na boca que impedem alimentação\n` +
+        `• Inchaço nos membros\n\n` +
+        `📞 CONTATOS:\n` +
+        `Hospital do Bem — Oncologia: (83) ____-____\n` +
+        `PS Hospital do Bem: (83) ____-____\n` +
+        `SAMU: 192\n\n` +
+        `SEMPRE INFORME QUE É PACIENTE EM QUIMIOTERAPIA.`;
+    }
+  },
+  4: {
+    titulo: '4 — PRESCRIÇÃO DE MEDICAMENTOS VIA ORAL',
+    subtitulo: 'Receituário médico',
+    buildContent: () => {
+      const b3 = document.getElementById('bloco3').innerText;
+      const b5 = document.getElementById('bloco5').innerText;
+      return `PRESCRIÇÃO MÉDICA — USO CONTÍNUO\n\n` +
+        `Medicamentos em uso atual:\n` + b3.substring(0, 600) + `\n\n` +
+        `Conduta terapêutica:\n` + b5.substring(0, 400) + `\n\n` +
+        `_________________________________\n` +
+        `Dr. Silas Negrão Serra Jr.\n` +
+        `CRM-PB 17341 · RQE 9099\n` +
+        `Oncologia Clínica\n` +
+        `Data: ${new Date().toLocaleDateString('pt-BR')}`;
+    }
+  },
+  5: {
+    titulo: '5 — TERMO DE CONSENTIMENTO LIVRE E ESCLARECIDO',
+    subtitulo: 'TCLE — Tratamento oncológico sistêmico',
+    buildContent: () => {
+      const b2 = document.getElementById('bloco2').innerText;
+      const b5 = document.getElementById('bloco5').innerText;
+      return `TERMO DE CONSENTIMENTO LIVRE E ESCLARECIDO (TCLE)\n\n` +
+        `Eu, ______________________________________________, portador(a) do CPF _________________, ` +
+        `declaro que fui adequadamente informado(a) pelo Dr. Silas Negrão Serra Jr. (CRM-PB 17341) ` +
+        `sobre meu diagnóstico, tratamento proposto, benefícios esperados, riscos e alternativas terapêuticas.\n\n` +
+        `DIAGNÓSTICO E SITUAÇÃO CLÍNICA:\n${b2.substring(0,400)}\n\n` +
+        `TRATAMENTO PROPOSTO:\n${b5.substring(0,400)}\n\n` +
+        `EFEITOS COLATERAIS POSSÍVEIS:\nNáuseas, vômitos, alopecia, neutropenia, neuropatia periférica, fadiga, ` +
+        `mucosite, risco de infecção, reações alérgicas (conforme protocolo específico).\n\n` +
+        `Declaro ter compreendido as informações e consinto com o tratamento.\n\n` +
+        `Patos-PB, ____/____/______\n\n` +
+        `Assinatura do paciente: _______________________________\n\n` +
+        `Assinatura do responsável: ____________________________\n\n` +
+        `Dr. Silas Negrão Serra Jr. — CRM-PB 17341`;
+    }
+  },
+  6: {
+    titulo: '6 — LAUDO MÉDICO PERICIAL',
+    subtitulo: 'Para fins previdenciários / judiciais / INSS',
+    buildContent: () => {
+      const b1 = document.getElementById('bloco1').innerText;
+      const b2 = document.getElementById('bloco2').innerText;
+      const b4 = document.getElementById('bloco4').innerText;
+      const b5 = document.getElementById('bloco5').innerText;
+      return `LAUDO MÉDICO\n\n` +
+        `IDENTIFICAÇÃO DO PACIENTE:\n${b1.substring(0,300)}\n\n` +
+        `DIAGNÓSTICO E RESUMO CLÍNICO:\n${b2.substring(0,500)}\n\n` +
+        `DADOS ONCOLÓGICOS:\n${b4.substring(0,600)}\n\n` +
+        `TRATAMENTO REALIZADO/EM CURSO:\n${b5.substring(0,400)}\n\n` +
+        `PARECER MÉDICO:\n` +
+        `O paciente apresenta neoplasia maligna com tratamento oncológico ativo/recente, ` +
+        `sendo necessário afastamento de atividades laborais no período de __________ a __________.\n\n` +
+        `Declaro que as informações acima são verdadeiras e baseadas em documentação médica.\n\n` +
+        `Patos-PB, ${new Date().toLocaleDateString('pt-BR')}\n\n` +
+        `_________________________________\n` +
+        `Dr. Silas Negrão Serra Jr.\n` +
+        `CRM-PB 17341 · RQE 9099\n` +
+        `Especialista em Oncologia Clínica`;
+    }
+  },
+  7: {
+    titulo: '7 — CONSULTA DE RETORNO — 7 DIAS',
+    subtitulo: 'Pós-ciclo / acompanhamento de toxicidade',
+    buildContent: () => {
+      const b2 = document.getElementById('bloco2').innerText;
+      const b6 = document.getElementById('bloco6').innerText;
+      const retorno = new Date(); retorno.setDate(retorno.getDate() + 7);
+      return `AGENDAMENTO DE RETORNO\n\n` +
+        `Retorno programado: ${retorno.toLocaleDateString('pt-BR')}\n\n` +
+        `RESUMO DA CONSULTA ATUAL:\n${b2.substring(0,400)}\n\n` +
+        `PENDÊNCIAS PARA O RETORNO:\n${b6.substring(0,500)}\n\n` +
+        `ORIENTAÇÕES ATÉ O RETORNO:\n` +
+        `• Manter medicações prescritas\n` +
+        `• Usar o cartão de alarme (documento 3)\n` +
+        `• Trazer todos os exames realizados\n` +
+        `• Anotar sintomas e dúvidas\n` +
+        `• Em caso de febre ou mal-estar, ir ao PS informando que é paciente em quimioterapia\n\n` +
+        `Dr. Silas Negrão Serra Jr. — CRM-PB 17341`;
+    }
+  },
+  8: {
+    titulo: '8 — ENCAMINHAMENTO — ATENÇÃO BÁSICA / UBS',
+    subtitulo: 'Contrarreferência para cuidados na atenção primária',
+    buildContent: () => {
+      const b1 = document.getElementById('bloco1').innerText;
+      const b2 = document.getElementById('bloco2').innerText;
+      const b5 = document.getElementById('bloco5').innerText;
+      return `ENCAMINHAMENTO / CONTRARREFERÊNCIA\n\n` +
+        `À equipe da Unidade Básica de Saúde (UBS)\n\n` +
+        `DADOS DO PACIENTE:\n${b1.substring(0,300)}\n\n` +
+        `DIAGNÓSTICO E CONTEXTO CLÍNICO:\n${b2.substring(0,400)}\n\n` +
+        `TRATAMENTO EM CURSO:\n${b5.substring(0,400)}\n\n` +
+        `CUIDADOS NA ATENÇÃO BÁSICA:\n` +
+        `• Controle de comorbidades (HAS, DM, etc.)\n` +
+        `• Renovação de medicamentos de uso contínuo\n` +
+        `• Curativos e cuidados domiciliares se necessário\n` +
+        `• Suporte emocional e de saúde mental\n` +
+        `• Visita domiciliar se indicado\n` +
+        `• ATENÇÃO: encaminhar ao PS se febre ou piora do estado geral\n\n` +
+        `Permanecemos à disposição para dúvidas.\n\n` +
+        `Dr. Silas Negrão Serra Jr. — CRM-PB 17341\n` +
+        `Oncologia Clínica — Hospital do Bem — Patos-PB`;
+    }
+  }
+};
+
+function generatePDF(num) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  const cfg = PDF_CONFIGS[num];
+
+  let y = buildPDFHeader(doc, cfg.titulo, cfg.subtitulo);
+  addPDFContent(doc, cfg.buildContent(), y);
+  addPDFFooter(doc);
+
+  const paciente = getPacienteInfo().replace(/\s+/g,'_');
+  doc.save(`${num}_${paciente}_${cfg.titulo.substring(4,20).replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}.pdf`);
+  showToast(`PDF ${num} gerado!`, 'success');
+}
+
+async function generateAllPDFsAndZip() {
+  const zip = new JSZip();
+  const { jsPDF } = window.jspdf;
+  const folder = zip.folder('Documentos_Oncologia');
+
+  showToast('Gerando 8 PDFs... aguarde', 'info');
+
+  for (let i = 1; i <= 8; i++) {
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const cfg = PDF_CONFIGS[i];
+    let y = buildPDFHeader(doc, cfg.titulo, cfg.subtitulo);
+    addPDFContent(doc, cfg.buildContent(), y);
+    addPDFFooter(doc);
+
+    const pdfBlob = doc.output('blob');
+    const paciente = getPacienteInfo().replace(/\s+/g,'_');
+    folder.file(`${i}_${paciente}_${cfg.titulo.substring(4,20).replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}.pdf`, pdfBlob);
+  }
+
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'Prontuario_Oncologico_Completo.zip'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('✓ ZIP com 8 PDFs gerado!', 'success');
+}
+
+// ─── UTILS ──────────────────────────────────────────────────────────────────────
+function copyBloco(num) {
+  const el = document.getElementById('bloco' + num);
+  navigator.clipboard.writeText(el.innerText).then(() => showToast('Copiado!', 'success'));
+}
+
+function clearAll() {
+  if (confirm('Limpar todos os 6 blocos?')) {
+    for (let i = 1; i <= 6; i++) document.getElementById('bloco' + i).innerText = '';
+    showToast('Blocos limpos', 'info');
+  }
+}
+
+function showProgress(pct, msg) {
+  document.getElementById('progress-bar').classList.remove('hidden');
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-msg').textContent = msg;
+}
+
+function hideProgress() {
+  document.getElementById('progress-bar').classList.add('hidden');
+  document.getElementById('progress-fill').style.width = '0%';
+}
+
+let toastTimeout;
+function showToast(msg, type = 'info') {
+  const colors = { success: '#16a34a', error: '#dc2626', info: '#2563eb' };
+  const el = document.getElementById('toast');
+  const inner = document.getElementById('toast-inner');
+  inner.textContent = msg;
+  inner.style.background = colors[type] || colors.info;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+// Init
+window.onload = () => {
+  updateApiStatus();
+  const saved = localStorage.getItem('gemini_api_key');
+  if (!saved) setTimeout(() => toggleApiConfig(), 800);
+};
+</script>
+</body>
+</html>
