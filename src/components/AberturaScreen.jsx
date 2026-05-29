@@ -8,7 +8,7 @@
 //   img4-quimio.jpg      → sala de quimio
 //   foto-silas.jpg       → foto Dr. Silas
 //
-// VÍDEO: public/abertura2.mp4  (já copiado)
+// VÍDEO: public/abertura3.mp4
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef, useCallback } from "react";
 
@@ -630,7 +630,7 @@ export default function AberturaScreen({ onConcluir }) {
         <video
           ref={videoRef}
           muted playsInline loop preload="auto"
-          src={`${BASE}abertura2.mp4`}
+          src={`${BASE}abertura3.mp4`}
           style={{
             position:"absolute", inset:0, width:"100%", height:"100%",
             objectFit:"cover", zIndex:0,
