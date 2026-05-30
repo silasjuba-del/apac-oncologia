@@ -2,17 +2,25 @@ node_modules/
 server/node_modules/
 dist/
 .env
+.env.*
+!.env.example
+!server/.env.example
 .env.local
 .env.production
-.env.*.local
 server/.env
 server/.env.example
 uploads/
 server/logs/
+server/data/
+.claude/
+.netlify/
+.vercel/
+.vite/
 *.db
 *.db-shm
 *.db-wal
 *.db-journal
+*.log
 # Credenciais Google — NUNCA subir para o GitHub
 server/google-service-account.json
 google-service-account.json

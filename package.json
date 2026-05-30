@@ -13,6 +13,10 @@
     "test": "vitest run",
     "lint": "eslint src --ext .js,.jsx --max-warnings 120",
     "lint:fix": "eslint src --ext .js,.jsx --fix",
+    "security:scan": "node scripts/scan-secrets.mjs",
+    "security:scan:tracked": "node scripts/scan-secrets.mjs --tracked",
+    "security:scan:staged": "node scripts/scan-secrets.mjs --staged",
+    "security:scan:history": "node scripts/scan-secrets.mjs --history",
     "reset-db": "node -e \"const fs=require('fs');['onco_app.db','onco_app.db-shm','onco_app.db-wal'].forEach(f=>{if(fs.existsSync(f)){fs.copyFileSync(f,f+'.bak');fs.unlinkSync(f);console.log('Apagado:',f);}});console.log('Banco resetado. Execute npm start para recriar.');\""
   },
   "type": "module",
