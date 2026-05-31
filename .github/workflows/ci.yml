@@ -37,7 +37,7 @@ jobs:
         run: npx vitest run --coverage
 
       - name: Upload relatório de coverage (HTML)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage-report
@@ -75,7 +75,7 @@ jobs:
           echo "=== Build concluído com sucesso ==="
 
       - name: Upload artefato de build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
