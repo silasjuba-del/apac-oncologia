@@ -1,0 +1,51 @@
+# .github/workflows/codeql.yml — APACApp Oncologia
+# Análise estática de segurança (SAST) via GitHub CodeQL.
+# Detecta: XSS, injeção, uso inseguro de eval, vazamento de dados, etc.
+# Docs: https://docs.github.com/en/code-security/code-scanning/using-codeql-code-scanning
+
+name: CodeQL Security Scan
+
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Roda toda segunda-feira às 03:00 (horário de Recife = UTC-3 → 06:00 UTC)
+    - cron: "0 6 * * 1"
+
+jobs:
+  analyze:
+    name: Análise CodeQL (JavaScript)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write   # obrigatório para publicar alertas
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript]  # cobre .js, .jsx, .ts, .tsx
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Inicializar CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Queries padrão + segurança estendida
+          queries: security-extended
+
+      # Build automático: o CodeQL detecta npm/Vite sozinho.
+      # Se precisar de build manual, substitua por:
+      #   run: npm ci && npm run build
+      - name: Auto-build
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Executar análise CodeQL
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

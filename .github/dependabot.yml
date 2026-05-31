@@ -1,0 +1,49 @@
+# .github/dependabot.yml — APACApp Oncologia
+# Mantém dependências npm atualizadas automaticamente.
+# Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+
+version: 2
+
+updates:
+  # ── Dependências npm (package.json) ─────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Recife"
+    open-pull-requests-limit: 10
+    # Agrupa patches e minor em um único PR por semana (menos ruído)
+    groups:
+      patch-updates:
+        update-types:
+          - "patch"
+      minor-updates:
+        update-types:
+          - "minor"
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    ignore:
+      # Atualizações major exigem revisão manual
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # ── Actions do GitHub (.github/workflows/*.yml) ──────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Recife"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(actions)"
